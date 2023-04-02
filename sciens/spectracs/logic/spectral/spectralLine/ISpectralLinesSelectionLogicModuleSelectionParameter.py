@@ -1,0 +1,3 @@
+class IPeakSelectionLogicModuleSelectionParameter(object):
+    pass
+
