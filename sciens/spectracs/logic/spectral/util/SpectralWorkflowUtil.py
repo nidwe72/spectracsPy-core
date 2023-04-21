@@ -1,9 +1,9 @@
 from sciens.base.Singleton import Singleton
-from spectracs.model.spectral.SpectralWorkflow import SpectralWorkflow
-from spectracs.model.spectral.SpectralWorkflowPhase import SpectralWorkflowPhase
-from spectracs.model.spectral.workflow.phase.acquireView.AcquireViewSpectralWorkflowPhase import \
+from sciens.spectracs.model.spectral.SpectralWorkflow import SpectralWorkflow
+from sciens.spectracs.model.spectral.SpectralWorkflowPhase import SpectralWorkflowPhase
+from sciens.spectracs.model.spectral.workflow.phase.acquireView.AcquireViewSpectralWorkflowPhase import \
     AcquireViewSpectralWorkflowPhase
-from spectracs.model.spectral.workflow.phase.setp.AcquireViewSpectralWorkflowStep import AcquireViewSpectralWorkflowStep
+from sciens.spectracs.model.spectral.workflow.phase.setp.AcquireViewSpectralWorkflowStep import AcquireViewSpectralWorkflowStep
 
 
 class SpectralWorkflowUtil(Singleton):
