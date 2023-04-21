@@ -3,7 +3,7 @@ import copy
 import numpy
 from scipy.signal import savgol_filter
 
-from base.Singleton import Singleton
+from sciens.base.Singleton import Singleton
 from sciens.spectracs.model.spectral.Spectrum import Spectrum
 
 
