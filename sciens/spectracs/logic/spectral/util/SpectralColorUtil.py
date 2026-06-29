@@ -74,3 +74,18 @@ class SpectralColorUtil(Singleton):
 
         return delta_e
 
+    def spectrumToColor(self, spectrum) -> QColor:
+        """
+        Evaluate a processed spectrum (on the 380-780 nm grid, normalized) into a perceptual swatch
+        colour. Thin façade over SpectrumToColorLogicModule (which owns the colour/colorsys/rgbxy
+        weight); imported lazily so this util stays light for its many wavelengthToColor callers.
+        Returns a QColor; the measured HLS values stay on the module's Result if needed later.
+        """
+        from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModule import SpectrumToColorLogicModule
+        from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModuleParameters import SpectrumToColorLogicModuleParameters
+
+        parameters = SpectrumToColorLogicModuleParameters()
+        parameters.setSpectrum(spectrum)
+        result = SpectrumToColorLogicModule().spectrumToColor(parameters)
+        return result.getColor()
+
