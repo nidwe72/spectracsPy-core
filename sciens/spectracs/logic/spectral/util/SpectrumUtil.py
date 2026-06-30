@@ -13,6 +13,10 @@ from sciens.spectracs.logic.spectral.rebinSpectrum.RebinSpectrumLogicModule impo
 from sciens.spectracs.logic.spectral.rebinSpectrum.RebinSpectrumLogicModuleParameters import RebinSpectrumLogicModuleParameters
 from sciens.spectracs.logic.spectral.normalizeSpectrum.NormalizeSpectrumLogicModule import NormalizeSpectrumLogicModule
 from sciens.spectracs.logic.spectral.normalizeSpectrum.NormalizeSpectrumLogicModuleParameters import NormalizeSpectrumLogicModuleParameters
+from sciens.spectracs.logic.spectral.transmission.TransmissionLogicModule import TransmissionLogicModule
+from sciens.spectracs.logic.spectral.transmission.TransmissionLogicModuleParameters import TransmissionLogicModuleParameters
+from sciens.spectracs.logic.spectral.absorption.AbsorptionLogicModule import AbsorptionLogicModule
+from sciens.spectracs.logic.spectral.absorption.AbsorptionLogicModuleParameters import AbsorptionLogicModuleParameters
 
 
 class SpectrumUtil(Singleton):
@@ -50,3 +54,19 @@ class SpectrumUtil(Singleton):
         parameters = NormalizeSpectrumLogicModuleParameters()
         parameters.setSpectrum(result)
         return NormalizeSpectrumLogicModule().normalizeSpectrum(parameters).getSpectrum()
+
+    def transmission(self, reference: Spectrum, sample: Spectrum, referenceFloorFraction: float = None):
+        # Two-input shortcut: transmittance T = sample / reference (illuminant cancels).
+        parameters = TransmissionLogicModuleParameters()
+        parameters.setReference(reference)
+        parameters.setSample(sample)
+        parameters.setReferenceFloorFraction(referenceFloorFraction)
+        return TransmissionLogicModule().transmission(parameters).getSpectrum()
+
+    def absorption(self, reference: Spectrum, sample: Spectrum, referenceFloorFraction: float = None):
+        # Two-input shortcut: absorbance A = -log10(sample / reference).
+        parameters = AbsorptionLogicModuleParameters()
+        parameters.setReference(reference)
+        parameters.setSample(sample)
+        parameters.setReferenceFloorFraction(referenceFloorFraction)
+        return AbsorptionLogicModule().absorption(parameters).getSpectrum()
