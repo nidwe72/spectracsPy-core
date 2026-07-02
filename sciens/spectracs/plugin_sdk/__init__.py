@@ -27,6 +27,7 @@ from sciens.spectracs.plugin_sdk.util.EvaluationColorUtil import EvaluationColor
 # --- base + roles ---
 from sciens.spectracs.plugin_sdk.base.SpectralPlugin import SpectralPlugin
 from sciens.spectracs.plugin_sdk.base.MeasurementStep import MeasurementStep
+from sciens.spectracs.plugin_sdk.base.MetadataField import MetadataField
 from sciens.spectracs.plugin_sdk.roles import REFERENCE, SAMPLE, TRANSMISSION, ABSORPTION
 
 __all__ = [
@@ -34,6 +35,6 @@ __all__ = [
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "SpectrumPlotView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "EvaluationColorUtil",
-    "SpectralPlugin", "MeasurementStep",
+    "SpectralPlugin", "MeasurementStep", "MetadataField",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
 ]

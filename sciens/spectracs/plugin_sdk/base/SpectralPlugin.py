@@ -15,7 +15,9 @@ class SpectralPlugin:
         raise NotImplementedError
 
     def metadata(self, workflow):
-        pass  # empty -> phase skipped
+        # Return a list[MetadataField] describing the editable metadata form (empty = no metadata).
+        # This hook DESCRIBES fields (it does not mutate the workflow like the others).
+        return []
 
     def publishing(self, workflow):
         pass  # empty -> phase skipped
