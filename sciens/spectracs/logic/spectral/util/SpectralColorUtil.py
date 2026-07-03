@@ -2,10 +2,6 @@ from PySide6.QtGui import QColor
 
 from sciens.base.Singleton import Singleton
 
-from colormath.color_objects import sRGBColor, LabColor
-from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie2000
-
 
 class SpectralColorUtil(Singleton):
 
@@ -65,6 +61,13 @@ class SpectralColorUtil(Singleton):
         return rv
 
     def getColorDifference(self,color1:QColor,color2:QColor):
+
+        # colormath pulls networkx -> bz2 (a stdlib module p4a doesn't build for the arm64 target).
+        # Import lazily so the app boots without it; this delta-E path is only exercised during
+        # colour comparison, not at startup or on the virtual pipeline's colour-conversion step.
+        from colormath.color_objects import sRGBColor, LabColor
+        from colormath.color_conversions import convert_color
+        from colormath.color_diff import delta_e_cie2000
 
         color1_rgb = sRGBColor(color1.redF(), color1.greenF(), color1.blueF());
         color2_rgb = sRGBColor(color2.redF(), color2.greenF(), color2.blueF());
