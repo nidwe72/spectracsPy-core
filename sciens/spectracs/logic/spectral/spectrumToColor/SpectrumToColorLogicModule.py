@@ -33,6 +33,13 @@ class SpectrumToColorLogicModule:
         cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
         illuminant = SDS_ILLUMINANTS["D65"]
 
+        # Align the (camera-derived, ~472-sample, possibly non-uniform) spectrum onto the CMF
+        # wavelength grid before integrating. Desktop's `colour` tolerates a mismatched grid, but the
+        # on-device version raises "operands could not be broadcast together with shapes (1,472)
+        # (471,)" when the sample count differs from the CMFs. Aligning yields a common grid on both
+        # OSes and identical results (verified). See docs/SPEC_android_port.md.
+        spectralDistribution = spectralDistribution.align(cmfs.shape)
+
         xyz = sd_to_XYZ(spectralDistribution, cmfs, illuminant, method="Integration")
         xy = XYZ_to_xy(xyz)
 
