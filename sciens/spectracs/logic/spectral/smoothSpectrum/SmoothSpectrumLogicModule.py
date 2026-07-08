@@ -7,18 +7,19 @@ from sciens.spectracs.logic.spectral.smoothSpectrum.SmoothSpectrumLogicModuleRes
 class SmoothSpectrumLogicModule:
 
     def smoothSpectrum(self, smoothSpectrumLogicModuleParameters: SmoothSpectrumLogicModuleParameters):
-        # Savitzky-Golay smoothing applied seven times in sequence (window 10, polyorder 3).
+        # Savitzky-Golay smoothing applied `passes` times in sequence (default window 10, polyorder 3,
+        # 7 passes — the historical behaviour). Callers that must preserve close features (calibration
+        # doublet) pass fewer passes / a smaller window (SPEC_dev_measure_bench (a)).
         spectrum = smoothSpectrumLogicModuleParameters.getSpectrum()
+        passes = smoothSpectrumLogicModuleParameters.getPasses()
+        window = smoothSpectrumLogicModuleParameters.getWindow()
+        polyorder = smoothSpectrumLogicModuleParameters.getPolyorder()
 
-        smoothedValues = savgol_filter(list(spectrum.valuesByNanometers.values()), 10, 3)
-        smoothedValues = savgol_filter(smoothedValues, 10, 3)
-        smoothedValues = savgol_filter(smoothedValues, 10, 3)
-        smoothedValues = savgol_filter(smoothedValues, 10, 3)
-        smoothedValues = savgol_filter(smoothedValues, 10, 3)
-        smoothedValues = savgol_filter(smoothedValues, 10, 3)
-        smoothedValues = savgol_filter(smoothedValues, 10, 3)
+        smoothedValues = list(spectrum.valuesByNanometers.values())
+        for _ in range(passes):
+            smoothedValues = savgol_filter(smoothedValues, window, polyorder)
 
-        smoothedValues = smoothedValues.flatten().tolist()
+        smoothedValues = smoothedValues.flatten().tolist() if hasattr(smoothedValues, "flatten") else list(smoothedValues)
 
         spectrum.valuesByNanometers = dict(zip(list(spectrum.valuesByNanometers.keys()), smoothedValues))
 

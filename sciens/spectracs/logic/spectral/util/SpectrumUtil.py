@@ -37,10 +37,18 @@ class SpectrumUtil(Singleton):
         parameters.setSpectrum(result)
         return MeanSpectrumLogicModule().meanSpectrum(parameters).getSpectrum()
 
-    def smooth(self, spectrum: Spectrum, clone: bool = False):
+    def smooth(self, spectrum: Spectrum, clone: bool = False,
+               passes: int = None, window: int = None, polyorder: int = None):
         result = copy.deepcopy(spectrum) if clone else spectrum
         parameters = SmoothSpectrumLogicModuleParameters()
         parameters.setSpectrum(result)
+        # Only override the historical defaults when a caller explicitly asks for lighter smoothing.
+        if passes is not None:
+            parameters.setPasses(passes)
+        if window is not None:
+            parameters.setWindow(window)
+        if polyorder is not None:
+            parameters.setPolyorder(polyorder)
         return SmoothSpectrumLogicModule().smoothSpectrum(parameters).getSpectrum()
 
     def rebin(self, spectrum: Spectrum, clone: bool = False):
