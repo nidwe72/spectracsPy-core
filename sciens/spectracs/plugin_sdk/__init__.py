@@ -16,6 +16,7 @@ from sciens.spectracs.model.spectral.evaluation.ColorSwatchView import ColorSwat
 from sciens.spectracs.model.spectral.evaluation.VerdictView import VerdictView
 from sciens.spectracs.model.spectral.evaluation.LabelView import LabelView
 from sciens.spectracs.model.spectral.evaluation.MetricFieldView import MetricFieldView
+from sciens.spectracs.model.spectral.evaluation.MetricFieldViewStyle import MetricFieldViewStyle
 from sciens.spectracs.model.spectral.evaluation.SpectrumPlotView import SpectrumPlotView
 
 # --- ops (container -> container adapters) + Qt-free util ---
@@ -35,7 +36,8 @@ from sciens.spectracs.plugin_sdk.roles import REFERENCE, SAMPLE, TRANSMISSION, A
 __all__ = [
     "SpectraContainer", "Spectrum", "SpectrumSampleType", "SpectralWorkflow", "SpectralWorkflowPhaseType",
     "SpectralWorkflowStep",
-    "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "SpectrumPlotView",
+    "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
+    "SpectrumPlotView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "EvaluationColorUtil", "SpectrumFeatureUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
