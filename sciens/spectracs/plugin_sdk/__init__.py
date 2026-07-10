@@ -11,13 +11,15 @@ from sciens.spectracs.model.spectral.SpectrumSampleType import SpectrumSampleTyp
 from sciens.spectracs.model.spectral.SpectralWorkflow import SpectralWorkflow
 from sciens.spectracs.model.spectral.SpectralWorkflowPhaseType import SpectralWorkflowPhaseType
 from sciens.spectracs.model.spectral.SpectralWorkflowStep import SpectralWorkflowStep
-from sciens.spectracs.model.spectral.evaluation.EvaluationResult import EvaluationResult
-from sciens.spectracs.model.spectral.evaluation.ColorSwatchView import ColorSwatchView
-from sciens.spectracs.model.spectral.evaluation.VerdictView import VerdictView
-from sciens.spectracs.model.spectral.evaluation.LabelView import LabelView
-from sciens.spectracs.model.spectral.evaluation.MetricFieldView import MetricFieldView
-from sciens.spectracs.model.spectral.evaluation.MetricFieldViewStyle import MetricFieldViewStyle
-from sciens.spectracs.model.spectral.evaluation.SpectrumPlotView import SpectrumPlotView
+from sciens.spectracs.model.spectral.plugin.view.EvaluationResult import EvaluationResult
+from sciens.spectracs.model.spectral.plugin.view.ColorSwatchView import ColorSwatchView
+from sciens.spectracs.model.spectral.plugin.view.VerdictView import VerdictView
+from sciens.spectracs.model.spectral.plugin.view.LabelView import LabelView
+from sciens.spectracs.model.spectral.plugin.view.MetricFieldView import MetricFieldView
+from sciens.spectracs.model.spectral.plugin.view.MetricFieldViewStyle import MetricFieldViewStyle
+from sciens.spectracs.model.spectral.plugin.view.SpectrumPlotView import SpectrumPlotView
+from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
+from sciens.spectracs.model.spectral.plugin.view.CaptureView import CaptureView
 
 # --- ops (container -> container adapters) + Qt-free util ---
 from sciens.spectracs.plugin_sdk.ops.MeanOp import MeanOp
@@ -37,7 +39,7 @@ __all__ = [
     "SpectraContainer", "Spectrum", "SpectrumSampleType", "SpectralWorkflow", "SpectralWorkflowPhaseType",
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
-    "SpectrumPlotView",
+    "SpectrumPlotView", "SpectrumCaptureView", "CaptureView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "EvaluationColorUtil", "SpectrumFeatureUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
