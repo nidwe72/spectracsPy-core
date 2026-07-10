@@ -20,6 +20,7 @@ from sciens.spectracs.model.spectral.plugin.view.MetricFieldViewStyle import Met
 from sciens.spectracs.model.spectral.plugin.view.SpectrumPlotView import SpectrumPlotView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
 from sciens.spectracs.model.spectral.plugin.view.CaptureView import CaptureView
+from sciens.spectracs.model.spectral.plugin.view.ReportView import ReportView
 
 # --- ops (container -> container adapters) + Qt-free util ---
 from sciens.spectracs.plugin_sdk.ops.MeanOp import MeanOp
@@ -39,7 +40,7 @@ __all__ = [
     "SpectraContainer", "Spectrum", "SpectrumSampleType", "SpectralWorkflow", "SpectralWorkflowPhaseType",
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
-    "SpectrumPlotView", "SpectrumCaptureView", "CaptureView",
+    "SpectrumPlotView", "SpectrumCaptureView", "CaptureView", "ReportView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "EvaluationColorUtil", "SpectrumFeatureUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
