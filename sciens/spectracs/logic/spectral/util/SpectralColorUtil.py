@@ -48,6 +48,32 @@ class SpectralColorUtil(Singleton):
         result=QColor.fromRgb(self.adjustColor(red, factor), self.adjustColor(green, factor), self.adjustColor(blue, factor))
         return result
 
+    def hueSimilarity(self, color: QColor, referenceColor: QColor) -> float:
+        """Soft, interval-free colour match (SPEC_capture_quality.md §13.4): saturation-weighted cosine closeness of
+        a pixel's hue to a reference hue. 1.0 = same hue & fully saturated; 0.0 when achromatic (low sat/value) or the
+        hue is >=90 deg away. Reference colours come from wavelengthToColor(target_nm), so there are no hard-coded hue
+        cutoffs. hue-similarity is a soft CONFIDENCE signal — it can disagree with a camera's rendering, so callers use
+        channelDominance() as the robust selector."""
+        import math
+        if color is None or referenceColor is None:
+            return 0.0
+        if color.valueF() < 0.10 or color.saturationF() < 0.12:
+            return 0.0
+        h1, h2 = color.hueF(), referenceColor.hueF()
+        if h1 < 0 or h2 < 0:
+            return 0.0
+        return float(color.saturationF()) * max(0.0, math.cos(math.radians((h1 - h2) * 360.0)))
+
+    def channelDominance(self, color: QColor, kind: str) -> float:
+        """Per-channel dominance — a ratio that still discriminates at LOW saturation (where hue is unreliable), so it
+        is the robust colour SELECTOR (SPEC §13.4). Normalised to [0,1]. kind in {green,blue,cyan,red}."""
+        if color is None:
+            return 0.0
+        r, g, b = color.red(), color.green(), color.blue()
+        value = {"green": g - max(r, b), "blue": b - max(r, g),
+                 "cyan": min(g, b) - r, "red": r - max(g, b)}.get(kind, 0.0)
+        return max(0.0, value / 255.0)
+
     def adjustColor(self,color, factor):
         if color < 0.01:
             return 0
