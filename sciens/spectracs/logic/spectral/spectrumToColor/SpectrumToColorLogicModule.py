@@ -1,6 +1,6 @@
 import colorsys
 
-from PySide6.QtGui import QColor
+from sciens.spectracs.model.spectral.SpectralColor import SpectralColor
 from colour import SpectralDistribution, MSDS_CMFS, SDS_ILLUMINANTS, sd_to_XYZ, XYZ_to_xy
 from rgbxy import Converter
 
@@ -23,7 +23,7 @@ class SpectrumToColorLogicModule:
         # Empty / unprocessed spectrum -> neutral grey swatch, no measured colour.
         if not valuesByNanometers:
             result = SpectrumToColorLogicModuleResult()
-            result.setColor(QColor.fromRgbF(0.5, 0.5, 0.5))
+            result.setColor(SpectralColor.fromRgbF(0.5, 0.5, 0.5))
             result.setHue(0.0)
             result.setLightness(0.0)
             result.setSaturation(0.0)
@@ -58,7 +58,7 @@ class SpectrumToColorLogicModule:
 
         # Swatch: keep the measured hue + saturation, pin lightness to the requested value.
         swatchRgb = colorsys.hls_to_rgb(hls[0], lightness, hls[2])
-        color = QColor.fromRgbF(swatchRgb[0], swatchRgb[1], swatchRgb[2])
+        color = SpectralColor.fromRgbF(swatchRgb[0], swatchRgb[1], swatchRgb[2])
 
         result = SpectrumToColorLogicModuleResult()
         result.setColor(color)

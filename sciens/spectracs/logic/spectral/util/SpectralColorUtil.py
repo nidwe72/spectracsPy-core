@@ -1,9 +1,11 @@
-from PySide6.QtGui import QColor
-
 from sciens.base.Singleton import Singleton
+from sciens.spectracs.model.spectral.SpectralColor import SpectralColor
 
 
 class SpectralColorUtil(Singleton):
+    # Qt-free (S1b): returns SpectralColor and reads only the QColor-shaped accessors, so a QColor still
+    # works as an argument -- which it must, because the camera hands `colorsByPixelIndices` QColors to
+    # hueSimilarity/channelDominance from the app-side calibration path. See SpectralColor's docstring.
 
     def wavelengthToColor(self,nm):
         """
@@ -45,10 +47,10 @@ class SpectralColorUtil(Singleton):
         else:
             factor = 0.3 + 0.7 * (780.0 - nm) / (780.0 - 700.0)
         # Return the calculated values in an (R,G,B) tuple.
-        result=QColor.fromRgb(self.adjustColor(red, factor), self.adjustColor(green, factor), self.adjustColor(blue, factor))
+        result=SpectralColor.fromRgb(self.adjustColor(red, factor), self.adjustColor(green, factor), self.adjustColor(blue, factor))
         return result
 
-    def hueSimilarity(self, color: QColor, referenceColor: QColor) -> float:
+    def hueSimilarity(self, color: SpectralColor, referenceColor: SpectralColor) -> float:
         """Soft, interval-free colour match (SPEC_capture_quality.md §13.4): saturation-weighted cosine closeness of
         a pixel's hue to a reference hue. 1.0 = same hue & fully saturated; 0.0 when achromatic (low sat/value) or the
         hue is >=90 deg away. Reference colours come from wavelengthToColor(target_nm), so there are no hard-coded hue
@@ -64,7 +66,7 @@ class SpectralColorUtil(Singleton):
             return 0.0
         return float(color.saturationF()) * max(0.0, math.cos(math.radians((h1 - h2) * 360.0)))
 
-    def channelDominance(self, color: QColor, kind: str) -> float:
+    def channelDominance(self, color: SpectralColor, kind: str) -> float:
         """Per-channel dominance — a ratio that still discriminates at LOW saturation (where hue is unreliable), so it
         is the robust colour SELECTOR (SPEC §13.4). Normalised to [0,1]. kind in {green,blue,cyan,red}."""
         if color is None:
@@ -86,7 +88,7 @@ class SpectralColorUtil(Singleton):
             return max_intensity
         return rv
 
-    def getColorDifference(self,color1:QColor,color2:QColor):
+    def getColorDifference(self,color1:SpectralColor,color2:SpectralColor):
 
         # colormath pulls networkx -> bz2 (a stdlib module p4a doesn't build for the arm64 target).
         # Import lazily so the app boots without it; this delta-E path is only exercised during
@@ -103,12 +105,12 @@ class SpectralColorUtil(Singleton):
 
         return delta_e
 
-    def spectrumToColor(self, spectrum) -> QColor:
+    def spectrumToColor(self, spectrum) -> SpectralColor:
         """
         Evaluate a processed spectrum (on the 380-780 nm grid, normalized) into a perceptual swatch
         colour. Thin façade over SpectrumToColorLogicModule (which owns the colour/colorsys/rgbxy
         weight); imported lazily so this util stays light for its many wavelengthToColor callers.
-        Returns a QColor; the measured HLS values stay on the module's Result if needed later.
+        Returns a SpectralColor; the measured HLS values stay on the module's Result if needed later.
         """
         from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModule import SpectrumToColorLogicModule
         from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModuleParameters import SpectrumToColorLogicModuleParameters
