@@ -1,0 +1,39 @@
+# spectracsPy-core — the Qt-free shared tier (SPEC_project_structure.md S3b/S4).
+#
+# DERIVED from what the code actually imports, not from prose:
+#     grep -rhoE "^\s*(from|import)\s+[a-z...]" sciens/ --include=*.py
+# Versions are pinned to what spectracsPy's working venv has, so a consumer installing these gets what the
+# science was verified against.
+#
+# NOT installable on its own today: the repos are namespace-merged via PYTHONPATH (PEP 420), not pip-installed,
+# and everything shares spectracsPy/venv. This file exists so the consumers who WILL need the list --
+# spectracs-plugins (S5) and a future senaite-spectracs -- can read it off rather than guess. Add
+# spectracsPy-model + spectracsPy-base (both dependency-free bar SQLAlchemy) alongside it.
+#
+# *** NO PySide6, NO pyqtgraph, NO opencv, NO Pyro5. *** That is this tier's whole point -- verified by importing
+# all 67 modules with PySide6 blocked from the import system.
+
+# --- the science ---
+numpy==1.26.4
+scipy==1.10.1            # savgol (smooth), morphological opening (baseline), find_peaks (spectralLine)
+colour-science==0.4.2    # sd_to_XYZ -- the live spectrum->colour path
+rgbxy==0.5
+spectres==2.2.0          # rebin
+
+# --- the render seam (M1 visitor + M2's PDF) ---
+matplotlib==3.7.1
+Pillow==9.5.0            # imported as PIL
+pypdf==6.14.2            # embeds the whole-Workflow JSON + capture attachments
+
+# --- optional; both are LAZY imports and neither is on a hot path ---
+# luxpy: synthesis/SpectrumSynthesisUtil uses luxpy.toolboxes.spdbuild.gaussian_spd for the 390-410nm UV-A LED
+#   (no measured Avonec curve exists there) and FALLS BACK to a plain Gaussian if it is missing. Note
+#   SPEC_spectrum_processing.md §174 lists luxpy as "drop -- dead code"; that referred to a different, since-
+#   removed call site in SpectrumToColor. luxpy is live again here. It drags pandas + matplotlib.
+# luxpy==1.9.8
+#
+# colormath: SpectralColorUtil.getColorDifference (delta-E 2000). Currently DEAD -- its only caller is
+#   SpectralLinesSelectionLogicModule.__validateByColor, which is #todo:unfinished, unreachable (no dispatch
+#   branch) and would crash if reached. See SPEC_project_structure.md "Dead chain". Imported lazily because
+#   colormath pulls networkx -> bz2, which p4a does not build for arm64.
+# colormath==3.0.0
