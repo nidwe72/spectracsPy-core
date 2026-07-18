@@ -37,6 +37,10 @@ from sciens.spectracs.plugin_sdk.base.MeasurementStep import MeasurementStep
 from sciens.spectracs.plugin_sdk.base.MetadataField import MetadataField
 from sciens.spectracs.plugin_sdk.roles import REFERENCE, SAMPLE, TRANSMISSION, ABSORPTION
 
+# --- version / compatibility gate ---
+from sciens.spectracs.plugin_sdk.version import (
+    SDK_VERSION, PluginSdkVersionError, checkSdkCompatible, checkSdkCompatibleVersion)
+
 __all__ = [
     "SpectraContainer", "Spectrum", "SpectrumSampleType", "SpectralWorkflow", "SpectralWorkflowPhaseType",
     "SpectralWorkflowStep",
@@ -45,4 +49,5 @@ __all__ = [
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "EvaluationColorUtil", "SpectrumFeatureUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
+    "SDK_VERSION", "PluginSdkVersionError", "checkSdkCompatible", "checkSdkCompatibleVersion",
 ]

@@ -1,9 +1,17 @@
+from sciens.spectracs.plugin_sdk.version import SDK_VERSION
+
+
 class SpectralPlugin:
     # One class, five per-phase hooks (concept §9.4). Qt-free; imports only plugin_sdk. Each hook mutates
     # the passed SpectralWorkflow: interactive phases DECLARE steps, computed phases CREATE+FILL them; a
     # hook that creates zero steps makes the host auto-skip that phase. (SPEC_pumpkin_integration.md B.4)
 
     title = None
+
+    # The plugin_sdk this plugin was built against; the host refuses to load a mismatch with a clear message
+    # (SPEC_plugin_distribution.md §4 / §8 A2). Defaults to the shipping SDK, so an in-app plugin that does
+    # not override it always matches by construction.
+    targetSdkVersion = SDK_VERSION
 
     def acquisition(self, workflow):
         raise NotImplementedError
