@@ -28,7 +28,13 @@ class MeanSpectrumLogicModule:
         # missing a key (-> NaN, ignored by the clip) so N < expected is valid.
         keys = list(frames[0].keys())
         stack = np.array([[frame.get(key, np.nan) for key in keys] for frame in frames], dtype=float)
-        reduced = RobustReductionLogicModule().sigmaClippedMean(stack)
+        robust = RobustReductionLogicModule()
+        # C1 (SPEC_capture_quality.md §14.8): drop whole frames that are a GLOBAL brightness outlier (the coherent
+        # dim group an auto-exposure ramp leaves in the reference burst) BEFORE the per-bin sigma-clip — the σ-clip
+        # can't reject a large-minority dim group, so without this the mean is biased low → T = S/R corrupted.
+        keepMask = robust.rejectDimFrames(stack)
+        keptStack = stack[keepMask] if keepMask.any() else stack
+        reduced = robust.sigmaClippedMean(keptStack)
 
         spectrum.valuesByNanometers = dict(zip(keys, [float(value) for value in reduced]))
         result.setSpectrum(spectrum)
