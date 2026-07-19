@@ -1,16 +1,89 @@
+import colorsys
+import math
+
+from colour import (SpectralDistribution, MSDS_CMFS, SDS_ILLUMINANTS, sd_to_XYZ, XYZ_to_xy,
+                    xyY_to_XYZ, XYZ_to_sRGB)
+
 from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModule import SpectrumToColorLogicModule
 from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModuleParameters import SpectrumToColorLogicModuleParameters
+from sciens.spectracs.model.spectral.Spectrum import Spectrum
 
 
 class EvaluationColorUtil:
-    # The Qt-free boundary (SPEC_pumpkin_integration.md P-B3): wraps SpectrumToColorLogicModule (which
-    # returns a QColor) and hands the plugin only PLAIN data — an (r, g, b) tuple and the hue in DEGREES
-    # (0-360, the proven verdict path — never QColor.hueF()). Keeps SpectralColorUtil out of plugin_sdk.
+    """The Qt-free colour boundary for plugins (SPEC_pumpkin_integration.md P-B3 / SPEC_color_retrieval.md). Wraps the
+    CIE pipeline and hands the plugin only PLAIN data — (r,g,b) tuples and HSL numbers, never a QColor.
+
+    Two entry points:
+      - `spectrumToRgbAndHue` — the ORIGINAL pinned-lightness swatch + hue (UNCHANGED; the pumpkin roast verdict
+        depends on its hue output, so its converter must stay `rgbxy`).
+      - `spectrumToHsl` + `rgbFromHsl` — the colour-chips API (§14.8/SPEC_color_retrieval): the measured H,S,L of a
+        spectrum, plus a builder to render a chip at a chosen (h,s,l). Converter is SOURCE-keyed (§F7):
+        transmission → `rgbxy` (perceived, verdict-compatible), absorbance → `colour.XYZ_to_sRGB` (full gamut, no
+        Philips-Hue clamping)."""
+
+    # Below this CHROMA the source is ~grey and its hue is meaningless — forcing a vivid chip would paint a
+    # confident fake colour (SPEC_color_retrieval.md §F10). The plugin greys such chips. Chroma (not raw HLS
+    # saturation) because HLS saturation blows up near white/black (a near-white reads S≈100% though it is ~grey);
+    # chroma = (1 − |2L−1|)·S stays small there.
+    ACHROMATIC_CHROMA = 8.0                # percent
 
     def spectrumToRgbAndHue(self, spectrum):
+        # UNCHANGED — the pumpkin verdict's hue path. Pinned-lightness swatch via rgbxy.
         parameters = SpectrumToColorLogicModuleParameters()
         parameters.setSpectrum(spectrum)
         result = SpectrumToColorLogicModule().spectrumToColor(parameters)
         color = result.getColor()
         rgb = (color.red(), color.green(), color.blue())
         return rgb, result.getHue()
+
+    def spectrumToHsl(self, spectrum, converter="rgbxy", ceiling=None):
+        """Measured (h, s, l) of the spectrum — h in [0,360), s and l in [0,100]. `converter`: "rgbxy" for
+        transmission-derived chips (verdict-compatible), "srgb" for absorbance-derived (full-gamut). `ceiling`
+        caps values (use for absorbance so a T→0 spike can't dominate). F9: non-finite → 0 and negatives → 0
+        (absorbance goes negative where T>1; negative "spectrum" values corrupt the CIE integral)."""
+        clean = {}
+        for nanometer, value in (spectrum.valuesByNanometers or {}).items():
+            if value is None or not math.isfinite(value):
+                value = 0.0
+            value = max(0.0, float(value))
+            if ceiling is not None:
+                value = min(value, ceiling)
+            clean[nanometer] = value
+        if not clean or not any(v > 0 for v in clean.values()):
+            return (0.0, 0.0, 0.0)                       # empty / all-dark → achromatic (plugin greys it)
+
+        if converter == "srgb":
+            return self.__cieHslViaSrgb(clean)
+        # rgbxy: reuse the tuned module unchanged (verdict-compatible), just on the sanitized values.
+        sanitized = Spectrum()
+        sanitized.valuesByNanometers = clean
+        parameters = SpectrumToColorLogicModuleParameters()
+        parameters.setSpectrum(sanitized)
+        result = SpectrumToColorLogicModule().spectrumToColor(parameters)
+        return (result.getHue(), result.getSaturation(), result.getLightness())
+
+    def __cieHslViaSrgb(self, valuesByNanometers):
+        # SPEC_color_retrieval.md §F7/§F11: CIE → chromaticity (xy drops luminance ⇒ dilution-invariant) →
+        # reconstruct at a MID luminance (Y=0.5; Y=1 pushes saturated colours out of gamut) → sRGB (full gamut,
+        # no Hue-triangle clamp) → clamp [0,1] → HSL.
+        spectralDistribution = SpectralDistribution(valuesByNanometers)
+        cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
+        illuminant = SDS_ILLUMINANTS["D65"]
+        spectralDistribution = spectralDistribution.align(cmfs.shape)
+        xyz = sd_to_XYZ(spectralDistribution, cmfs, illuminant, method="Integration")
+        xy = XYZ_to_xy(xyz)
+        reconstructed = xyY_to_XYZ([float(xy[0]), float(xy[1]), 0.5])
+        rgb = XYZ_to_sRGB(reconstructed)
+        red, green, blue = (min(1.0, max(0.0, float(channel))) for channel in rgb)
+        hls = colorsys.rgb_to_hls(red, green, blue)      # HLS order: [0]=h, [1]=l, [2]=s
+        return (hls[0] * 360.0, hls[2] * 100.0, hls[1] * 100.0)
+
+    def rgbFromHsl(self, hue, saturation, lightness):
+        """Build a 0-255 (r,g,b) from HSL: hue in degrees (wrapped), saturation/lightness in [0,100]."""
+        red, green, blue = colorsys.hls_to_rgb((hue % 360.0) / 360.0, lightness / 100.0, saturation / 100.0)
+        return (int(round(red * 255)), int(round(green * 255)), int(round(blue * 255)))
+
+    def chroma(self, saturation, lightness):
+        """HSL colourfulness that behaves near white/black (SPEC_color_retrieval.md §F10): `(1 − |2L−1|)·S`, in
+        percent. ~0 for grey/near-white/near-black, high only for a genuinely vivid hue."""
+        return (1.0 - abs(2.0 * lightness / 100.0 - 1.0)) * saturation
