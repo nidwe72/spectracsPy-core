@@ -9,6 +9,8 @@ from sciens.spectracs.logic.spectral.smoothSpectrum.SmoothSpectrumLogicModule im
 from sciens.spectracs.logic.spectral.smoothSpectrum.SmoothSpectrumLogicModuleParameters import SmoothSpectrumLogicModuleParameters
 from sciens.spectracs.logic.spectral.removeBaseline.RemoveBaselineLogicModule import RemoveBaselineLogicModule
 from sciens.spectracs.logic.spectral.removeBaseline.RemoveBaselineLogicModuleParameters import RemoveBaselineLogicModuleParameters
+from sciens.spectracs.logic.spectral.medianFilter.MedianFilterSpectrumLogicModule import MedianFilterSpectrumLogicModule
+from sciens.spectracs.logic.spectral.medianFilter.MedianFilterSpectrumLogicModuleParameters import MedianFilterSpectrumLogicModuleParameters
 from sciens.spectracs.logic.spectral.rebinSpectrum.RebinSpectrumLogicModule import RebinSpectrumLogicModule
 from sciens.spectracs.logic.spectral.rebinSpectrum.RebinSpectrumLogicModuleParameters import RebinSpectrumLogicModuleParameters
 from sciens.spectracs.logic.spectral.normalizeSpectrum.NormalizeSpectrumLogicModule import NormalizeSpectrumLogicModule
@@ -50,6 +52,14 @@ class SpectrumUtil(Singleton):
         if polyorder is not None:
             parameters.setPolyorder(polyorder)
         return SmoothSpectrumLogicModule().smoothSpectrum(parameters).getSpectrum()
+
+    def medianFilter(self, spectrum: Spectrum, kernelSize: int = None, clone: bool = False):
+        result = copy.deepcopy(spectrum) if clone else spectrum
+        parameters = MedianFilterSpectrumLogicModuleParameters()
+        parameters.setSpectrum(result)
+        if kernelSize is not None:
+            parameters.setKernelSize(kernelSize)
+        return MedianFilterSpectrumLogicModule().medianFilter(parameters).getSpectrum()
 
     def rebin(self, spectrum: Spectrum, clone: bool = False):
         result = copy.deepcopy(spectrum) if clone else spectrum

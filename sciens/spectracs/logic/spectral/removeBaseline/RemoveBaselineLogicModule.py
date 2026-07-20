@@ -8,6 +8,13 @@ from sciens.spectracs.logic.spectral.removeBaseline.RemoveBaselineLogicModuleRes
 class RemoveBaselineLogicModule:
 
     def removeBaseline(self, removeBaselineLogicModuleParameters: RemoveBaselineLogicModuleParameters):
+        # SCOPE: this is a morphological opening tuned for SHARP EMISSION LINES (calibration peak detection),
+        # NOT a general baseline for broad absorption features. With its default ~10%-width window it estimates
+        # and subtracts a wandering CONTINUUM, which would strip the broad colour-carrying envelope of an
+        # absorption spectrum. For the additive flat baseline b of A = ε·c·l + b (dilution / scatter offset),
+        # use FlatOffsetBaselineLogicModule (a 0th-order constant offset) instead — see SPEC_capability_proof.md
+        # §7.0.1 ("Why not reuse RemoveBaselineLogicModule").
+        #
         # Baseline / continuum removal: a morphological opening (erosion then dilation) over a window
         # wider than an emission line but narrower than the continuum estimates the background; subtracting
         # it isolates the sharp lines. Helps peak detection, especially in the dense red cluster.

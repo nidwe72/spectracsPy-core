@@ -28,6 +28,9 @@ from sciens.spectracs.plugin_sdk.ops.MeanOp import MeanOp
 from sciens.spectracs.plugin_sdk.ops.TransmissionOp import TransmissionOp
 from sciens.spectracs.plugin_sdk.ops.AbsorptionOp import AbsorptionOp
 from sciens.spectracs.plugin_sdk.ops.VerdictOp import VerdictOp
+from sciens.spectracs.plugin_sdk.ops.BaselineOffsetOp import BaselineOffsetOp
+from sciens.spectracs.plugin_sdk.ops.SmoothOp import SmoothOp
+from sciens.spectracs.plugin_sdk.ops.MedianFilterOp import MedianFilterOp
 from sciens.spectracs.plugin_sdk.util.EvaluationColorUtil import EvaluationColorUtil
 from sciens.spectracs.plugin_sdk.util.SpectrumFeatureUtil import SpectrumFeatureUtil
 
@@ -46,7 +49,8 @@ __all__ = [
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
     "SpectrumPlotView", "SpectrumCaptureView", "CaptureView", "ReportView", "LimsPublishView",
-    "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "EvaluationColorUtil", "SpectrumFeatureUtil",
+    "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "BaselineOffsetOp", "SmoothOp", "MedianFilterOp",
+    "EvaluationColorUtil", "SpectrumFeatureUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
     "SDK_VERSION", "PluginSdkVersionError", "checkSdkCompatible", "checkSdkCompatibleVersion",
