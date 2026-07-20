@@ -1,3 +1,5 @@
+import numpy as np
+
 from sciens.base.Singleton import Singleton
 from sciens.spectracs.model.spectral.SpectralColor import SpectralColor
 
@@ -75,6 +77,37 @@ class SpectralColorUtil(Singleton):
         value = {"green": g - max(r, b), "blue": b - max(r, g),
                  "cyan": min(g, b) - r, "red": r - max(g, b)}.get(kind, 0.0)
         return max(0.0, value / 255.0)
+
+    # --- pixel-intensity reductions (SPEC_capture_quality.md §15) -----------------------------------------
+    # "The gray of a pixel." Lives here so it is ONE definition, not written inline across the capture code.
+    # toGrayMaximum is the DEFAULT (radiometric): the brightest channel = the Bayer channel that actually saw
+    # that wavelength, so blue is not suppressed. toGrayLuminance is the OLD photometric Qt-qGray weighting
+    # (weights blue only 5/32 -> under-reads blue ~3x). The scalar forms take a QColor-shaped colour; the
+    # *Array forms are the vectorized siblings for the per-column reduction hot loop.
+
+    def toGrayMaximum(self, color):
+        """Radiometric intensity of a pixel = the brightest channel (SPEC §15, the default)."""
+        return max(color.red(), color.green(), color.blue())
+
+    def toGrayLuminance(self, color):
+        """Photometric luminance = Qt qGray weighting (11,16,5)/32 — the OLD reduction, kept for comparison."""
+        return (11 * color.red() + 16 * color.green() + 5 * color.blue()) // 32
+
+    def toGrayMean(self, color):
+        """Unweighted channel mean — all channels weighted equally."""
+        return (color.red() + color.green() + color.blue()) // 3
+
+    def toGrayMaximumArray(self, r, g, b):
+        """Vectorized toGrayMaximum for the per-column reduction (numpy channel arrays or scalars)."""
+        return np.maximum(np.maximum(r, g), b)
+
+    def toGrayLuminanceArray(self, r, g, b):
+        """Vectorized toGrayLuminance (the old Qt-qGray weighting)."""
+        return (11.0 * r + 16.0 * g + 5.0 * b) / 32.0
+
+    def toGrayMeanArray(self, r, g, b):
+        """Vectorized toGrayMean."""
+        return (r + g + b) / 3.0
 
     def adjustColor(self,color, factor):
         if color < 0.01:
