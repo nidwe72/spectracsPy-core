@@ -4,6 +4,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
 from sciens.spectracs.logic.spectral.report.WorkflowItemVisitor import WorkflowItemVisitor, dispatchItem
+from sciens.spectracs.plugin_sdk.util.GaugeColorUtil import GaugeColorUtil
 
 
 class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
@@ -31,6 +32,7 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
     __H_LABEL_IN = 0.34
     __H_METRIC_IN = 0.30
     __H_VERDICT_IN = 0.50
+    __H_GAUGE_IN = 1.15         # SPEC_roast_ampel.md §8.4 — caption + band + (swatch|pill) row
     __H_SWATCH_IN = 1.30
     __H_PLOT_IN = 3.20
     __H_CAPTURE_IN = 3.30
@@ -129,6 +131,85 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
 
     def visitVerdict(self, view):
         self.__textBlock(self.__H_VERDICT_IN, str(view.roastState), fontsize=15, weight="bold")
+
+    def visitGauge(self, view):
+        # SPEC_roast_ampel.md §8.4 — the VerdictGaugeView on paper: caption, an OKLab gradient band with a marker
+        # (imshow of gradientStops), a swatch chip with the value on it, and the verdict pill. Render-mode aware.
+        from sciens.spectracs.model.spectral.plugin.view.GaugeRender import GaugeRender
+        util = GaugeColorUtil()
+        rect = self.__reserve(self.__H_GAUGE_IN)
+        left, bottom, width, height = rect
+        components = view.render
+
+        # Layout mirrors a metric row (Edwin 2026-07-24): caption is the left-column label; the band + swatch +
+        # pill sit in the value column so the gauge lines up with the metric field values below.
+        valueX = left + 0.30 * width
+        valueW = 0.68 * width
+        if view.caption:
+            self.__fig.text(left, bottom + 0.5 * height, str(view.caption), ha="left", va="center",
+                            fontsize=9, color="0.25", fontweight="bold")
+
+        # --- band + marker (imshow a 1xN gradient) ---
+        if GaugeRender.BAND in components and view.gradientAnchors:
+            stops = util.gradientStops(view.gradientAnchors, view.bandLeft, view.bandRight, steps=64)
+            row = [list(v / 255.0 for v in util.hexToRgb(hexColor)) for _pos, hexColor in stops]
+            ax = self.__fig.add_axes([valueX, bottom + 0.55 * height, valueW, 0.22 * height])
+            ax.imshow([row], extent=[0, 1, 0, 1], aspect="auto", origin="lower", interpolation="bilinear")
+            markerPos = util.positionOf(view.value, view.bandLeft, view.bandRight)
+            ax.axvline(markerPos, color="0.12", lw=1.4)
+            ax.plot([markerPos], [0.5], marker="o", markersize=5, markerfacecolor="white",
+                    markeredgecolor="0.12", markeredgewidth=1.2)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis("off")
+
+        # --- swatch chip (with the value on it) + verdict pill, in the value column ---
+        rowY = bottom + 0.08 * height
+        rowH = 0.34 * height
+        cursorX = valueX
+        if GaugeRender.SWATCH in components:
+            swatchWidth = 0.16 * width
+            ax = self.__fig.add_axes([cursorX, rowY, swatchWidth, rowH])
+            swatchHex = view.swatchColor or util.gradientColorAt(view.value, view.gradientAnchors)
+            ax.add_patch(Rectangle((0, 0), 1, 1, facecolor=swatchHex, edgecolor="0.4"))
+            ax.text(0.5, 0.5, self.__gaugeValueText(view), ha="center", va="center",
+                    color=(view.valueColor or "#ffffff"), fontsize=9, fontweight="bold")
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis("off")
+            cursorX += swatchWidth + 0.03 * width
+
+        if GaugeRender.LABEL in components and view.verdictLabel:
+            # a rounded text-bbox is the pill — it auto-sizes to the label and stays a clean pill regardless of
+            # the page aspect (a FancyBboxPatch in a wide/short axes distorts into a bowtie).
+            colors = self.__gaugeClassColors(view, util)
+            self.__fig.text(cursorX, rowY + rowH / 2.0, view.verdictLabel.upper(), ha="left", va="center",
+                            fontsize=8, fontweight="bold", color=colors["text"],
+                            bbox=dict(boxstyle="round,pad=0.5", facecolor=colors["bg"], edgecolor="none"))
+            cursorX += 0.36 * width
+
+        if GaugeRender.VALUE in components:
+            self.__fig.text(cursorX, rowY + rowH / 2.0, self.__gaugeValueText(view),
+                            ha="left", va="center", fontsize=11, fontweight="bold")
+
+    @staticmethod
+    def __gaugeValueText(view):
+        try:
+            return "%.2f" % float(view.value)
+        except (TypeError, ValueError):
+            return str(view.value)
+
+    @staticmethod
+    def __gaugeClassColors(view, util):
+        # the pill colours for the class this value falls in; PDF is white paper -> prefer print* variants if given
+        colors = {"text": "#333333", "bg": "#dddddd"}
+        if view.classes and view.thresholds is not None and view.bandLeft is not None:
+            index = util.classify(view.value, view.thresholds, view.bandLeft, view.bandRight)
+            index = max(0, min(index, len(view.classes) - 1))
+            declared = view.classes[index].get("colors", {})
+            colors = {"text": declared.get("printText", declared.get("text", colors["text"])),
+                      "bg": declared.get("printBg", declared.get("bg", colors["bg"]))}
+        return colors
 
     def visitMetricField(self, view):
         rect = self.__reserve(self.__H_METRIC_IN)

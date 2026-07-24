@@ -4,6 +4,7 @@ from sciens.spectracs.model.spectral.plugin.view.MetricFieldView import MetricFi
 from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumPlotView import SpectrumPlotView
 from sciens.spectracs.model.spectral.plugin.view.VerdictView import VerdictView
+from sciens.spectracs.model.spectral.plugin.view.VerdictGaugeView import VerdictGaugeView
 
 
 class WorkflowItemVisitor:
@@ -24,6 +25,9 @@ class WorkflowItemVisitor:
     def visitVerdict(self, view):
         raise NotImplementedError
 
+    def visitGauge(self, view):
+        raise NotImplementedError
+
     def visitSpectrumPlot(self, view):
         raise NotImplementedError
 
@@ -38,6 +42,8 @@ def dispatchItem(item, visitor):
         return visitor.visitMetricField(item)
     if isinstance(item, ColorSwatchView):
         return visitor.visitColorSwatch(item)
+    if isinstance(item, VerdictGaugeView):
+        return visitor.visitGauge(item)
     if isinstance(item, VerdictView):
         return visitor.visitVerdict(item)
     if isinstance(item, SpectrumCaptureView):

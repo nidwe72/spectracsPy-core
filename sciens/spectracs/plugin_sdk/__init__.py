@@ -22,6 +22,8 @@ from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import Spec
 from sciens.spectracs.model.spectral.plugin.view.CaptureView import CaptureView
 from sciens.spectracs.model.spectral.plugin.view.ReportView import ReportView
 from sciens.spectracs.model.spectral.plugin.view.LimsPublishView import LimsPublishView
+from sciens.spectracs.model.spectral.plugin.view.VerdictGaugeView import VerdictGaugeView
+from sciens.spectracs.model.spectral.plugin.view.GaugeRender import GaugeRender
 
 # --- ops (container -> container adapters) + Qt-free util ---
 from sciens.spectracs.plugin_sdk.ops.MeanOp import MeanOp
@@ -33,6 +35,7 @@ from sciens.spectracs.plugin_sdk.ops.SmoothOp import SmoothOp
 from sciens.spectracs.plugin_sdk.ops.MedianFilterOp import MedianFilterOp
 from sciens.spectracs.plugin_sdk.util.EvaluationColorUtil import EvaluationColorUtil
 from sciens.spectracs.plugin_sdk.util.SpectrumFeatureUtil import SpectrumFeatureUtil
+from sciens.spectracs.plugin_sdk.util.GaugeColorUtil import GaugeColorUtil
 
 # --- base + roles ---
 from sciens.spectracs.plugin_sdk.base.SpectralPlugin import SpectralPlugin
@@ -49,8 +52,9 @@ __all__ = [
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
     "SpectrumPlotView", "SpectrumCaptureView", "CaptureView", "ReportView", "LimsPublishView",
+    "VerdictGaugeView", "GaugeRender",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "BaselineOffsetOp", "SmoothOp", "MedianFilterOp",
-    "EvaluationColorUtil", "SpectrumFeatureUtil",
+    "EvaluationColorUtil", "SpectrumFeatureUtil", "GaugeColorUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
     "SDK_VERSION", "PluginSdkVersionError", "checkSdkCompatible", "checkSdkCompatibleVersion",
