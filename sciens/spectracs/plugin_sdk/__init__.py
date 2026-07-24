@@ -24,6 +24,7 @@ from sciens.spectracs.model.spectral.plugin.view.ReportView import ReportView
 from sciens.spectracs.model.spectral.plugin.view.LimsPublishView import LimsPublishView
 from sciens.spectracs.model.spectral.plugin.view.VerdictGaugeView import VerdictGaugeView
 from sciens.spectracs.model.spectral.plugin.view.GaugeRender import GaugeRender
+from sciens.spectracs.model.spectral.plugin.view.MetadataFormView import MetadataFormView
 
 # --- ops (container -> container adapters) + Qt-free util ---
 from sciens.spectracs.plugin_sdk.ops.MeanOp import MeanOp
@@ -43,6 +44,11 @@ from sciens.spectracs.plugin_sdk.base.MeasurementStep import MeasurementStep
 from sciens.spectracs.plugin_sdk.base.MetadataField import MetadataField
 from sciens.spectracs.plugin_sdk.roles import REFERENCE, SAMPLE, TRANSMISSION, ABSORPTION
 
+# --- cross-cutting policy (plugin-declared flow/navigation; SPEC_simplified_plugin_navigation.md §4.2) ---
+from sciens.spectracs.plugin_sdk.policy.NavigationMode import NavigationMode
+from sciens.spectracs.plugin_sdk.policy.NavigationPolicy import NavigationPolicy
+from sciens.spectracs.plugin_sdk.policy.WorkflowPolicy import WorkflowPolicy
+
 # --- version / compatibility gate ---
 from sciens.spectracs.plugin_sdk.version import (
     SDK_VERSION, PluginSdkVersionError, checkSdkCompatible, checkSdkCompatibleVersion)
@@ -52,10 +58,11 @@ __all__ = [
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
     "SpectrumPlotView", "SpectrumCaptureView", "CaptureView", "ReportView", "LimsPublishView",
-    "VerdictGaugeView", "GaugeRender",
+    "VerdictGaugeView", "GaugeRender", "MetadataFormView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "BaselineOffsetOp", "SmoothOp", "MedianFilterOp",
     "EvaluationColorUtil", "SpectrumFeatureUtil", "GaugeColorUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
+    "NavigationMode", "NavigationPolicy", "WorkflowPolicy",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
     "SDK_VERSION", "PluginSdkVersionError", "checkSdkCompatible", "checkSdkCompatibleVersion",
 ]

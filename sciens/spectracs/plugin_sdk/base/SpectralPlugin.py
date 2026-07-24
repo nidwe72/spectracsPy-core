@@ -1,4 +1,5 @@
 from sciens.spectracs.plugin_sdk.version import SDK_VERSION
+from sciens.spectracs.plugin_sdk.policy.WorkflowPolicy import WorkflowPolicy
 
 
 class SpectralPlugin:
@@ -29,3 +30,10 @@ class SpectralPlugin:
 
     def publishing(self, workflow):
         pass  # empty -> phase skipped
+
+    def policy(self):
+        # Cross-cutting FLOW/presentation policy (SPEC_simplified_plugin_navigation.md §4.2) — the ONE hook for
+        # navigation mode, step-chevrons, etc. Default = today's behaviour (STEP navigation, no step-chevrons),
+        # so a plugin that does not override it is unchanged. A plugin overrides to opt into auto-advance or
+        # per-step chevrons. Content stays in the phase hooks; how the run flows lives here.
+        return WorkflowPolicy.default()
