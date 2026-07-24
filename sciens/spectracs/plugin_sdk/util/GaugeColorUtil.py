@@ -94,6 +94,19 @@ class GaugeColorUtil:
         pos = (value - bandLeft) / (bandRight - bandLeft)
         return max(0.0, min(1.0, pos))
 
+    def zoneMarkerPosition(self, value, thresholds, bandLeft, bandRight):
+        # SPEC_roast_ampel.md §8.4 (ZONES) — the marker position on a SYMBOLIC equal-width zone bar (n+1 classes
+        # → n+1 equal segments, threshold(s) at the segment joins, D-zones-split). Within its own segment the
+        # marker sits at the value's true depth in that class's range. Distinct from positionOf (the fine band).
+        n = len(thresholds) + 1
+        index = self.classify(value, thresholds, bandLeft, bandRight)
+        edges = [0.0] + sorted(self.positionOf(t, bandLeft, bandRight) for t in thresholds) + [1.0]
+        lo, hi = edges[index], edges[index + 1]
+        valuePos = self.positionOf(value, bandLeft, bandRight)
+        frac = 0.5 if hi == lo else (valuePos - lo) / (hi - lo)
+        frac = max(0.0, min(1.0, frac))
+        return (index + frac) / n
+
     def classify(self, value, thresholds, bandLeft, bandRight):
         # Which class a value falls in, orientation-aware (band may descend). classes are ordered left->right;
         # class index = number of threshold-boundaries the value has passed going left->right. A value sitting

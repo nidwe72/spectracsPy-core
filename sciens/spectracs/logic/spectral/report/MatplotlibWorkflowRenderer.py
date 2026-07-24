@@ -155,9 +155,28 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
             row = [list(v / 255.0 for v in util.hexToRgb(hexColor)) for _pos, hexColor in stops]
             ax = self.__fig.add_axes([valueX, bottom + 0.55 * height, valueW, 0.22 * height])
             ax.imshow([row], extent=[0, 1, 0, 1], aspect="auto", origin="lower", interpolation="bilinear")
+            for t in (view.thresholds or []):            # dashed threshold tick(s) — the decision line (Option A)
+                ax.axvline(util.positionOf(t, view.bandLeft, view.bandRight), color="0.9", lw=1.2, ls=(0, (3, 2)))
             markerPos = util.positionOf(view.value, view.bandLeft, view.bandRight)
             ax.axvline(markerPos, color="0.12", lw=1.4)
             ax.plot([markerPos], [0.5], marker="o", markersize=5, markerfacecolor="white",
+                    markeredgecolor="0.12", markeredgewidth=1.2)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis("off")
+
+        # --- coarse ZONES bar (Option B): n equal class-coloured segments + dividers + zone marker ---
+        if GaugeRender.ZONES in components and view.classes:
+            ax = self.__fig.add_axes([valueX, bottom + 0.55 * height, valueW, 0.22 * height])
+            n = len(view.classes)
+            for i, cls in enumerate(view.classes):
+                c = cls.get("colors", {})
+                ax.add_patch(Rectangle((i / n, 0), 1 / n, 1, facecolor=c.get("zone", c.get("bg", "#888")),
+                                       edgecolor="none"))
+            for i in range(1, n):
+                ax.axvline(i / n, color="0.9", lw=1.4)
+            mp = util.zoneMarkerPosition(view.value, view.thresholds, view.bandLeft, view.bandRight)
+            ax.plot([mp], [0.5], marker="o", markersize=6, markerfacecolor="white",
                     markeredgecolor="0.12", markeredgewidth=1.2)
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
