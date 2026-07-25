@@ -42,12 +42,17 @@ class NavigationFlow:
         return last is not None and cursor == last
 
     @staticmethod
-    def forwardTarget(stops, cursor, mode):
+    def forwardTarget(stops, cursor, mode, canJump=True):
         # The cursor index a forward Next should land on given the CURRENT (already-regrown) stops list, or None
         # to FINISH. AUTO_ADVANCE jumps from the acquisition boundary to the halt stop; otherwise a plain step.
+        # Option C (SPEC_simplified_plugin_navigation.md §4.4a): the jump fires only on a FRESH capture pass —
+        # the host passes canJump=False on a revisit whose PROCESSING was already computed, so re-entering
+        # acquisition and paging forward without re-capturing steps through the phases one-by-one instead of
+        # skipping straight to the halt.
         if NavigationFlow.isTerminal(stops, cursor):
             return None
-        if mode == NavigationMode.AUTO_ADVANCE and NavigationFlow.isAtAcquisitionBoundary(stops, cursor):
+        if (mode == NavigationMode.AUTO_ADVANCE and canJump
+                and NavigationFlow.isAtAcquisitionBoundary(stops, cursor)):
             halt = NavigationFlow.haltIndex(stops)
             return halt if halt > cursor else cursor + 1
         return cursor + 1

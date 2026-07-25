@@ -31,8 +31,8 @@ class WorkflowReportBuilder:
         SpectralWorkflowPhaseType.ACQUISITION: "Acquisition",
         SpectralWorkflowPhaseType.PROCESSING: "Processing",
         SpectralWorkflowPhaseType.EVALUATION: "Evaluation",
-        SpectralWorkflowPhaseType.METADATA: "Metadata",
-        SpectralWorkflowPhaseType.PUBLISHING: "Publishing",
+        SpectralWorkflowPhaseType.METADATA: "Details",   # match the chevron (Edwin 2026-07-25); a doc SECTION
+        SpectralWorkflowPhaseType.PUBLISHING: "Publishing",  # heading — keep the plain word (nav says "Verdict/Publish")
     }
 
     def __init__(self, workflow, reportView):

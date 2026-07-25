@@ -307,6 +307,14 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
                 label=(label or None))
         return True
 
+    def visitTabGroup(self, view):
+        # T2 (SPEC_simplified_plugin_navigation.md §7b): paper has no tabs — stack the children under their tab
+        # headings so the reader sees every grouped image/plot (e.g. full-frame + cropped-ROI raster).
+        for label, child in view.tabs:
+            if label:
+                self.__textBlock(self.__H_LABEL_IN, str(label), fontsize=10, weight="bold", color="0.3")
+            dispatchItem(child, self)
+
     def visitSpectrumCapture(self, view):
         rect = self.__reserve(self.__H_CAPTURE_IN)
         image = getattr(view, "reportImage", None)

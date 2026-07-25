@@ -19,6 +19,7 @@ from sciens.spectracs.model.spectral.plugin.view.MetricFieldView import MetricFi
 from sciens.spectracs.model.spectral.plugin.view.MetricFieldViewStyle import MetricFieldViewStyle
 from sciens.spectracs.model.spectral.plugin.view.SpectrumPlotView import SpectrumPlotView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
+from sciens.spectracs.model.spectral.plugin.view.TabGroupView import TabGroupView
 from sciens.spectracs.model.spectral.plugin.view.CaptureView import CaptureView
 from sciens.spectracs.model.spectral.plugin.view.ReportView import ReportView
 from sciens.spectracs.model.spectral.plugin.view.LimsPublishView import LimsPublishView
@@ -57,7 +58,7 @@ __all__ = [
     "SpectraContainer", "Spectrum", "SpectrumSampleType", "SpectralWorkflow", "SpectralWorkflowPhaseType",
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
-    "SpectrumPlotView", "SpectrumCaptureView", "CaptureView", "ReportView", "LimsPublishView",
+    "SpectrumPlotView", "SpectrumCaptureView", "TabGroupView", "CaptureView", "ReportView", "LimsPublishView",
     "VerdictGaugeView", "GaugeRender", "MetadataFormView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "BaselineOffsetOp", "SmoothOp", "MedianFilterOp",
     "EvaluationColorUtil", "SpectrumFeatureUtil", "GaugeColorUtil",

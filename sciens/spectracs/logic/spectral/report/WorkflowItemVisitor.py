@@ -3,6 +3,7 @@ from sciens.spectracs.model.spectral.plugin.view.LabelView import LabelView
 from sciens.spectracs.model.spectral.plugin.view.MetricFieldView import MetricFieldView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumPlotView import SpectrumPlotView
+from sciens.spectracs.model.spectral.plugin.view.TabGroupView import TabGroupView
 from sciens.spectracs.model.spectral.plugin.view.VerdictView import VerdictView
 from sciens.spectracs.model.spectral.plugin.view.VerdictGaugeView import VerdictGaugeView
 
@@ -34,6 +35,9 @@ class WorkflowItemVisitor:
     def visitSpectrumCapture(self, view):
         raise NotImplementedError
 
+    def visitTabGroup(self, view):
+        raise NotImplementedError
+
 
 def dispatchItem(item, visitor):
     # The ONE isinstance ladder. Routes a plugin view-model to the visitor method for its type. Types are
@@ -42,6 +46,8 @@ def dispatchItem(item, visitor):
         return visitor.visitMetricField(item)
     if isinstance(item, ColorSwatchView):
         return visitor.visitColorSwatch(item)
+    if isinstance(item, TabGroupView):
+        return visitor.visitTabGroup(item)
     if isinstance(item, VerdictGaugeView):
         return visitor.visitGauge(item)
     if isinstance(item, VerdictView):

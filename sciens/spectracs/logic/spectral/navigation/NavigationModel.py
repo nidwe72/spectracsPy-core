@@ -28,8 +28,8 @@ class NavigationModel:
         SpectralWorkflowPhaseType.ACQUISITION: "Acquisition",
         SpectralWorkflowPhaseType.PROCESSING: "Processing",
         SpectralWorkflowPhaseType.EVALUATION: "Evaluation",
-        SpectralWorkflowPhaseType.METADATA: "Metadata",
-        SpectralWorkflowPhaseType.PUBLISHING: "Publishing",
+        SpectralWorkflowPhaseType.METADATA: "Details",          # Edwin 2026-07-25: was "Metadata"
+        SpectralWorkflowPhaseType.PUBLISHING: "Verdict/Publish",  # Edwin 2026-07-25: was "Publishing"
     }
 
     @staticmethod
