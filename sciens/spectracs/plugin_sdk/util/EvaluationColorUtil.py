@@ -27,6 +27,12 @@ class EvaluationColorUtil:
     # chroma = (1 − |2L−1|)·S stays small there.
     ACHROMATIC_CHROMA = 8.0                # percent
 
+    # Pass `ceiling=EvaluationColorUtil.RELATIVE` instead of a hard number: the cap is then derived from the
+    # spectrum's own 95th percentile, so it survives a change of absorbance SCALE (gamma linearization moves it
+    # ~2.2x) and a host/plugin version skew. See __resolveCeiling. SPEC_capture_quality.md §17.6/7.
+    RELATIVE = "relative"
+    RELATIVE_CEILING_MULTIPLE = 2.0
+
     # D65 2° white chromaticity — the neutral point the intrinsic-perceived complement reflects through
     # (SPEC_capability_proof.md option (b) / SPEC_color_retrieval.md). Reflecting the absorbed chromaticity through
     # white — (2·white − absorbed) — is the colorimetric "other half of the light" (the mixing-to-white complement),
@@ -83,12 +89,30 @@ class EvaluationColorUtil:
             if value is None or not math.isfinite(value):
                 value = 0.0
             value = max(0.0, float(value))
-            if ceiling is not None:
-                value = min(value, ceiling)
             clean[nanometer] = value
+        ceiling = self.__resolveCeiling(clean, ceiling)
+        if ceiling is not None:
+            clean = {nanometer: min(value, ceiling) for nanometer, value in clean.items()}
         if not clean or not any(v > 0 for v in clean.values()):
             return None
         return clean
+
+    def __resolveCeiling(self, values, ceiling):
+        # RELATIVE ceiling (SPEC_capture_quality.md §17.6/7). An ABSOLUTE cap has to be re-tuned whenever the
+        # absorbance SCALE moves — and gamma linearization moves it by ~2.2x. Worse, the old 3.0 lived in
+        # PLUGIN code, and plugins ship as sealed versioned DB blobs (M3): a linearized host running an older
+        # assigned plugin version would clamp real signal with nothing to warn about it. So the cap is derived
+        # from the spectrum itself: a multiple of its 95th percentile. That is dormant on a normal spectrum
+        # (A peaks ~1.3-1.6 against a p95 ~2x lower — the same dormancy the 3.0 had), scales with gamma for
+        # free, and still catches what the cap exists for: a T->0 spike in a few bins dominating the CIE
+        # integral. Absolute numbers still work — the existing tests pass 3.0 — but plugins should pass RELATIVE.
+        if ceiling != self.RELATIVE:
+            return ceiling
+        positives = sorted(value for value in values.values() if value > 0.0)
+        if not positives:
+            return None
+        index = min(len(positives) - 1, int(round(0.95 * (len(positives) - 1))))
+        return self.RELATIVE_CEILING_MULTIPLE * positives[index]
 
     def __cieXy(self, valuesByNanometers):
         # SPEC_color_retrieval.md §F7/§F11: CIE → chromaticity xy (drops luminance ⇒ dilution-invariant).

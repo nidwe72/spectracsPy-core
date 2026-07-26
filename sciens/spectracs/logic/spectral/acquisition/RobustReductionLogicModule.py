@@ -32,9 +32,15 @@ class RobustReductionLogicModule:
     SIGMA_ITERS = 5        # max clip passes (stops early on convergence)
     DIM_FRAME_K = 3.0      # per-FRAME brightness reject threshold in robust sigma (§14.8 C1)
     MIN_FRAMES_TO_REJECT = 5   # need enough frames for a trustworthy robust brightness center
-    DIM_FRAME_SCALE_FLOOR = 0.02   # floor the reject scale at 2% of the brightness level: a blatant dim frame can't
-                                   # survive a pathologically tight clean cluster (MAD≈0), and near-identical clean
-                                   # frames aren't over-rejected. So the effective reject band is ≥ K·2% ≈ 6% dim.
+    DIM_FRAME_SCALE_FLOOR = 0.045  # floor the reject scale at 4.5% of the brightness level: a blatant dim frame
+                                   # can't survive a pathologically tight clean cluster (MAD≈0), and near-identical
+                                   # clean frames aren't over-rejected. So the effective reject band is ≥ K·4.5%
+                                   # ≈ 13% dim in LINEAR light.
+                                   # Was 2% when the frames arriving here were gamma-ENCODED (SPEC_capture_quality
+                                   # §17): x^γ multiplies every small relative deviation by γ, so a 2% linear band
+                                   # is only ~0.9% in camera DN and C1 would reject ~γ× more eagerly. The RATIO
+                                   # constants above (TUKEY_C, SIGMA_K, DIM_FRAME_K) need no such correction —
+                                   # deviation and MAD scale together — this fixed FRACTION is the one exception.
     __MAD_TO_SIGMA = 1.4826
 
     def tukeyBiweightPerColumn(self, band):

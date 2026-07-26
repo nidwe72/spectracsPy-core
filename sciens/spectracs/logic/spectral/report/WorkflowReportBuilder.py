@@ -161,7 +161,16 @@ class WorkflowReportBuilder:
         writer = PdfWriter()
         writer.append(PdfReader(sourcePdfPath))
         if getattr(self.__reportView, "embedMetadata", True):
-            payload = json.dumps(self.__workflow.toReportJson(), indent=2).encode("utf-8")
+            # Stamp the capture DECODE MODEL into the run's machine record (SPEC_capture_quality.md §17.6/8).
+            # A post-§17 absorbance is ~2.2x a pre-§17 one, and every archived baseline is pre-§17 — band RATIOS
+            # stay comparable across the boundary, absolute absorbance and colour do not. Stamping makes the era
+            # readable off the artifact instead of inferred from its date. Injected here rather than in
+            # SpectralWorkflow.toReportJson so the -model tier keeps no dependency on the decode util (and it
+            # needs no DB column: the report IS the travelling record).
+            from sciens.spectracs.logic.spectral.util.SpectralColorUtil import SpectralColorUtil
+            report = self.__workflow.toReportJson()
+            report.setdefault("header", {})["captureDecode"] = SpectralColorUtil().captureDecodeDescriptor()
+            payload = json.dumps(report, indent=2).encode("utf-8")
             writer.add_attachment("workflow.json", payload)
         for name, pngBytes in self.__captures:
             writer.add_attachment(name, pngBytes)
