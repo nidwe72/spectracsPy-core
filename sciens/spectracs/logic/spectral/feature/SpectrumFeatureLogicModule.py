@@ -53,19 +53,32 @@ class SpectrumFeatureLogicModule:
         # scale; neither removes a slope. A two-window linear fit removes both.
         #
         # Generic: the windows are a PARAMETER — no use-case knowledge here (the plugin owns which windows).
+        # They are expected DISJOINT; a point in two overlapping windows would be counted in both.
+        # EACH WINDOW CARRIES EQUAL TOTAL WEIGHT, regardless of how many points fall in it. A window is ONE
+        # piece of evidence about the baseline, not one per sample: an unweighted fit would let a wider window
+        # silently dominate (520–540 contributes 135 points against 600–630's 212 on the bench rig, so the red
+        # end would pull ~1.6x harder), and widening a window would then move the baseline as a side-effect.
+        # Measured on the 25 runs of 2026-07-27 the two fits differ by ~0.5 % and change NO verdict — this is
+        # for predictability under a window change, not for accuracy (SPEC_capture_quality.md §16.10.9).
         from sciens.spectracs.model.spectral.Spectrum import Spectrum
         if spectrum is None:
             return None
         points = self.__sorted(spectrum)
-        anchors = [(nm, value) for nm, value in points
-                   if any(lo <= nm <= hi for lo, hi in windows)]
+        anchors, weights = [], []
+        for low, high in windows:
+            inWindow = [(nm, value) for nm, value in points if low <= nm <= high]
+            if not inWindow:
+                continue
+            anchors.extend(inWindow)
+            weights.extend([1.0 / len(inWindow)] * len(inWindow))
         if len(anchors) < 2:
             return None
         nanometers = np.array([nm for nm, _ in anchors], dtype=np.float64)
         values = np.array([value for _, value in anchors], dtype=np.float64)
         if np.ptp(nanometers) == 0.0:                      # all anchors at one λ -> no slope is defined
             return None
-        slope, intercept = np.polyfit(nanometers, values, 1)
+        # polyfit's `w` multiplies the RESIDUAL, so it minimises sum((w*r)^2) — pass sqrt of the intended weight.
+        slope, intercept = np.polyfit(nanometers, values, 1, w=np.sqrt(np.array(weights, dtype=np.float64)))
         corrected = Spectrum()
         corrected.role = spectrum.role
         corrected.sampleType = spectrum.sampleType
