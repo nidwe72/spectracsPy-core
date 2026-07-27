@@ -168,6 +168,27 @@ class SpectralColorUtil(Singleton):
         exponent = DEFAULT_CAPTURE_GAMMA if gamma is None else gamma
         return (np.maximum(array, 0.0) / 255.0) ** exponent * 255.0
 
+    def encodeGammaValue(self, value, gamma=None):
+        """LINEAR 0..255 -> the camera DN that produced it. The decode's exact inverse, for DISPLAY."""
+        return self.encodeGammaFraction(max(0.0, float(value)) / 255.0, gamma)
+
+    def toDisplayDnSpectrum(self, spectrum, gamma=None):
+        """A copy of `spectrum` with its LINEAR values mapped back to camera DN — for PLOTS ONLY.
+
+        The pipeline stays linear (that is what §17 fixed); the eye does not. Every judgement made from a live
+        trace is a SENSOR fact — clipping at 255, the AE target at 245, quantization taking over below 16 DN —
+        and on a linear axis those landmarks collapse into the bottom few percent: the whole usable-but-dim
+        range 16..60 DN occupies the bottom 4%, and the 16 DN guard line lands at 0.58 of 255. A dim-but-healthy
+        band then looks identical to a dead one, which on 2026-07-27 caused a series of over-diluted
+        measurements (SPEC_capture_quality.md §16.7.2e). Same reason a camera histogram shows raw levels."""
+        from sciens.spectracs.model.spectral.Spectrum import Spectrum
+        if spectrum is None or not getattr(spectrum, "valuesByNanometers", None):
+            return spectrum
+        display = Spectrum()
+        display.valuesByNanometers = {nanometer: self.encodeGammaValue(value, gamma)
+                                      for nanometer, value in spectrum.valuesByNanometers.items()}
+        return display
+
     def encodeGammaFraction(self, fraction, gamma=None):
         """LINEAR fraction in [0,1] -> ENCODED 0..255 — the inverse of decodeGammaArray, for the virtual
         device's image encoder. The two are inverse halves of one transform and must ship together

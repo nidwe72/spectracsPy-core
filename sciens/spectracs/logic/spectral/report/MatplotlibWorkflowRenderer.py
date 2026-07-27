@@ -277,10 +277,20 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         # leave headroom for the title/axis labels inside the reserved band
         ax = self.__fig.add_axes([rect[0], rect[1] + 0.14 * rect[3], rect[2], 0.72 * rect[3]])
         traces = view.allTraces() if hasattr(view, "allTraces") else [(view.spectrum, None, None)]
+        # axis="dn" — same display-only inverse decode the screen uses, so paper and screen cannot drift
+        # (SPEC_capture_quality.md §16.7.2e).
+        asDn = getattr(view, "axis", None) == "dn"
+        if asDn:
+            from sciens.spectracs.logic.spectral.util.SpectralColorUtil import SpectralColorUtil
+            util = SpectralColorUtil()
         plotted = False
         for spectrum, label, color in traces:
-            drawn = self.__plotSpectrum(ax, spectrum, label, self.__COLORS.get(color, color))
+            drawn = self.__plotSpectrum(ax, util.toDisplayDnSpectrum(spectrum) if asDn else spectrum,
+                                        label, self.__COLORS.get(color, color))
             plotted = plotted or drawn
+        if asDn:
+            ax.set_ylabel("camera DN", fontsize=8)
+            ax.axhline(16.0, color="#c87a3c", ls="--", lw=0.8)
         for band in (getattr(view, "bands", None) or []):
             ax.axvspan(band[0], band[1], color="0.5", alpha=0.15, zorder=-10)
         for marker in (getattr(view, "markers", None) or []):
