@@ -16,6 +16,9 @@ class SpectrumFeatureUtil(Singleton):
     def linearBaseline(self, spectrum, lam, anchorLo, anchorHi, halfWindow=5):
         return SpectrumFeatureLogicModule().linearBaseline(spectrum, lam, anchorLo, anchorHi, halfWindow)
 
+    def linearBaselineCorrected(self, spectrum, windows):
+        return SpectrumFeatureLogicModule().linearBaselineCorrected(spectrum, windows)
+
     def referenceGatedBand(self, valueSpectrum, gateSpectrum, lo, hi,
                            gateFraction, valueCeiling, gatePeakLo, gatePeakHi):
         return SpectrumFeatureLogicModule().referenceGatedBand(

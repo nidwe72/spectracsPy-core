@@ -39,6 +39,40 @@ class SpectrumFeatureLogicModule:
         fraction = (lam - anchorLo) / (anchorHi - anchorLo)
         return aLo + (aHi - aLo) * fraction
 
+    def linearBaselineCorrected(self, spectrum, windows):
+        # Least-squares straight line through EVERY point falling in `windows` (a list of (lo, hi) anchor
+        # windows), subtracted from the whole spectrum. Returns a NEW Spectrum; None if fewer than two
+        # anchor points survive (a line needs two).
+        #
+        # Distinct from linearBaseline() above, which evaluates a two-anchor line AT one wavelength. This one
+        # FITS across the anchor windows and CORRECTS the whole curve, so a downstream band mean reads the
+        # feature above its local baseline rather than above zero.
+        #
+        # WHY a line and not an offset (SPEC_capture_quality.md §16.10.2): a re-seating tilt enters absorbance
+        # as an offset AND a slope. A constant-anchor subtraction removes the offset; SNV removes offset and
+        # scale; neither removes a slope. A two-window linear fit removes both.
+        #
+        # Generic: the windows are a PARAMETER — no use-case knowledge here (the plugin owns which windows).
+        from sciens.spectracs.model.spectral.Spectrum import Spectrum
+        if spectrum is None:
+            return None
+        points = self.__sorted(spectrum)
+        anchors = [(nm, value) for nm, value in points
+                   if any(lo <= nm <= hi for lo, hi in windows)]
+        if len(anchors) < 2:
+            return None
+        nanometers = np.array([nm for nm, _ in anchors], dtype=np.float64)
+        values = np.array([value for _, value in anchors], dtype=np.float64)
+        if np.ptp(nanometers) == 0.0:                      # all anchors at one λ -> no slope is defined
+            return None
+        slope, intercept = np.polyfit(nanometers, values, 1)
+        corrected = Spectrum()
+        corrected.role = spectrum.role
+        corrected.sampleType = spectrum.sampleType
+        corrected.valuesByNanometers = {
+            nm: float(value - (slope * nm + intercept)) for nm, value in points}
+        return corrected
+
     def referenceGatedBand(self, valueSpectrum, gateSpectrum, lo, hi,
                            gateFraction, valueCeiling, gatePeakLo, gatePeakHi):
         # Mean of valueSpectrum over [lo, hi], keeping only wavelengths where the gate spectrum is healthy
