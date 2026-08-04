@@ -7,7 +7,10 @@ from sciens.spectracs.model.spectral.Spectrum import Spectrum
 class SpectrumSynthesisUtil(Singleton):
     # Forward, physical synthesis for the playground (concept/KB):
     #   REFERENCE  R(λ) = Σ LED SPDs (Avonec-measured-shaped Gaussians; warm-white = pump + phosphor)
-    #   SAMPLE     S(λ) = R(λ) · 10^(−A_oil(λ))   with A_oil = chlorophyll/carotenoid bands + roast browning
+    #   SAMPLE     S(λ) = R(λ) · 10^(−A_oil(λ))   with A_oil = protochlorophyll/carotenoid absorption
+    #                                             plus roast browning
+    # ⚠ "chlorophyll" here until 2026-08-04 — the wrong molecule (`KB_spectroscopy_physics.md` §4.1). It
+    # changes nothing in this file, which models a moving TRANSMISSION WINDOW rather than named bands.
     # The single `roast` knob monotonically rotates the transmission colour green→brown, so a 1-D search
     # lands any target hue. All synthetic — known provenance.
 
