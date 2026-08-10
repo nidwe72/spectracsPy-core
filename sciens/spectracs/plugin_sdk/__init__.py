@@ -25,6 +25,7 @@ from sciens.spectracs.model.spectral.plugin.view.ReportView import ReportView
 from sciens.spectracs.model.spectral.plugin.view.LimsPublishView import LimsPublishView
 from sciens.spectracs.model.spectral.plugin.view.VerdictGaugeView import VerdictGaugeView
 from sciens.spectracs.model.spectral.plugin.view.GaugeRender import GaugeRender
+from sciens.spectracs.model.spectral.plugin.view.LegendPosition import LegendPosition
 from sciens.spectracs.model.spectral.plugin.view.MetadataFormView import MetadataFormView
 
 # --- ops (container -> container adapters) + Qt-free util ---
@@ -59,7 +60,7 @@ __all__ = [
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
     "SpectrumPlotView", "SpectrumCaptureView", "TabGroupView", "CaptureView", "ReportView", "LimsPublishView",
-    "VerdictGaugeView", "GaugeRender", "MetadataFormView",
+    "VerdictGaugeView", "GaugeRender", "LegendPosition", "MetadataFormView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "BaselineOffsetOp", "SmoothOp", "MedianFilterOp",
     "EvaluationColorUtil", "SpectrumFeatureUtil", "GaugeColorUtil",
     "SpectralPlugin", "MeasurementStep", "MetadataField",

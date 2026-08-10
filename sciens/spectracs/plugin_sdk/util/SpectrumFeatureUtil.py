@@ -19,6 +19,10 @@ class SpectrumFeatureUtil(Singleton):
     def linearBaselineCorrected(self, spectrum, windows):
         return SpectrumFeatureLogicModule().linearBaselineCorrected(spectrum, windows)
 
+    def fittedBaseline(self, spectrum, windows):
+        # The line linearBaselineCorrected subtracts, as a drawable Spectrum (SPEC_soret_448_trim.md §12.2).
+        return SpectrumFeatureLogicModule().fittedBaseline(spectrum, windows)
+
     def referenceGatedBand(self, valueSpectrum, gateSpectrum, lo, hi,
                            gateFraction, valueCeiling, gatePeakLo, gatePeakHi):
         return SpectrumFeatureLogicModule().referenceGatedBand(

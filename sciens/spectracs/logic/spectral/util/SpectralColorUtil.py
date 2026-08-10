@@ -240,3 +240,21 @@ class SpectralColorUtil(Singleton):
         result = SpectrumToColorLogicModule().spectrumToColor(parameters)
         return result.getColor()
 
+
+    # --- annotation colours (SPEC_soret_448_trim.md §25.2) ---------------------------------------------------
+
+    def darkenHex(self, color, factor=0.55):
+        """A darker shade of a '#rrggbb' colour — the BADGE fill behind a white numeral.
+
+        ⚠ Why this exists rather than "just use the bar colour": measured against white text, the bar colours
+        give 1.84:1 (cyan #35d3d3) and 2.42:1 (gold #c9a227), against the 4.5:1 a small glyph needs. Darkened
+        they give 5.24:1 and 4.96:1. The badge still reads as "the cyan one" — the hue is untouched — so the
+        rule "a badge wears its bar's colour" survives while the numeral stays legible.
+
+        Non-hex input (a pyqtgraph short name like 'y', or None) is returned unchanged: the caller then gets
+        whatever it passed, which is the safe outcome for a colour this util does not understand.
+        """
+        if not isinstance(color, str) or not color.startswith("#") or len(color) not in (7, 9):
+            return color
+        channels = [int(color[index:index + 2], 16) for index in (1, 3, 5)]
+        return "#%02x%02x%02x" % tuple(max(0, min(255, int(channel * factor))) for channel in channels)

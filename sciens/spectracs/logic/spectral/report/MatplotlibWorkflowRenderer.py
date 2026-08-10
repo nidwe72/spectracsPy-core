@@ -39,6 +39,10 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
 
     # pyqtgraph short colour codes → matplotlib (both accept y/c/m/g/r; keep an explicit map for clarity)
     __COLORS = {"y": "y", "c": "c", "m": "m", "g": "g", "r": "r", "b": "b", "w": "0.2", None: None}
+    # The view-model's `style` names -> matplotlib linestyles. Same vocabulary the screen renderer maps to Qt
+    # pen styles (SPEC_soret_448_trim.md §12.2), so a dashed baseline is dashed on both.
+    __LINE_STYLES = {"dashed": "--", "dotted": ":", None: "-"}
+    __LEGEND_PADDING = 34.0    # points; the default when a view declares a position but no padding
 
     def render(self, reportView, groups, logoImage=None):
         # groups: ordered list of (phaseLabel, [items]) — only phases that contributed flagged items.
@@ -276,7 +280,7 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         rect = self.__reserve(self.__H_PLOT_IN)
         # leave headroom for the title/axis labels inside the reserved band
         ax = self.__fig.add_axes([rect[0], rect[1] + 0.14 * rect[3], rect[2], 0.72 * rect[3]])
-        traces = view.allTraces() if hasattr(view, "allTraces") else [(view.spectrum, None, None)]
+        traces = view.allTraces() if hasattr(view, "allTraces") else [(view.spectrum, None, None, None)]
         # axis="dn" — same display-only inverse decode the screen uses, so paper and screen cannot drift
         # (SPEC_capture_quality.md §16.7.2e).
         asDn = getattr(view, "axis", None) == "dn"
@@ -284,29 +288,118 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
             from sciens.spectracs.logic.spectral.util.SpectralColorUtil import SpectralColorUtil
             util = SpectralColorUtil()
         plotted = False
-        for spectrum, label, color in traces:
+        for spectrum, label, color, style in traces:
             drawn = self.__plotSpectrum(ax, util.toDisplayDnSpectrum(spectrum) if asDn else spectrum,
-                                        label, self.__COLORS.get(color, color))
+                                        label, self.__COLORS.get(color, color), style)
             plotted = plotted or drawn
+        levels = getattr(view, "levels", None) or []
         if asDn:
             ax.set_ylabel("camera DN", fontsize=8)
-            ax.axhline(16.0, color="#c87a3c", ls="--", lw=0.8)
+            if not levels:   # legacy blob (no declared guards) — same fallback rule as the screen renderer
+                ax.axhline(16.0, color="#c87a3c", ls="--", lw=0.8)
         for band in (getattr(view, "bands", None) or []):
-            ax.axvspan(band[0], band[1], color="0.5", alpha=0.15, zorder=-10)
+            color = self.__COLORS.get(band[3], band[3]) if len(band) > 3 and band[3] else "0.5"
+            ax.axvspan(band[0], band[1], color=color, alpha=0.15, zorder=-10)
+            if len(band) > 2 and band[2]:
+                # INSIDE the axes, hanging from the top spine — the strip ABOVE the axes belongs to the marker
+                # labels, and with four bands plus a Q marker the two rows collide (§18 S9/defect 10).
+                # ⚠ EDGE CLAMP (§25.3): a caption centred on a band near the window edge overflows and is cut.
+                centre = (band[0] + band[1]) / 2.0
+                low, high = ax.get_xlim()
+                margin = 0.06 * (high - low)
+                align = "right" if centre > high - margin else ("left" if centre < low + margin else "center")
+                ax.annotate(str(band[2]), xy=(centre, 0.985), xycoords=("data", "axes fraction"),
+                            ha=align, va="top", fontsize=6.5, color="0.45")
+        for level in levels:
+            # SPEC_soret_448_trim.md §12.2 — unranged = a full-width guide line (the DN guards), ranged = a bar
+            # over the band at that height (a band mean). ⚠ NOT gamma-encoded on a dn plot: only the CURVE is.
+            value, lowNm, highNm, label, color, style, number = tuple(level) + (None,) * (7 - len(level))
+            barColor = self.__COLORS.get(color, color) or "0.35"
+            lineStyle = self.__LINE_STYLES.get(style, "-")
+            if lowNm is None or highNm is None:
+                ax.axhline(value, color=barColor, ls=lineStyle, lw=0.8)
+                if label:
+                    ax.annotate(str(label), xy=(0.005, value), xycoords=("axes fraction", "data"),
+                                ha="left", va="bottom", fontsize=6, color=barColor)
+            else:
+                ax.plot([lowNm, highNm], [value, value], color=barColor, ls=lineStyle, lw=1.8)
+                if number is not None:
+                    # §25.2 — the numbered badge, on paper a real circle. Fill darkened so the white numeral
+                    # is legible; ring in the bar's own colour so the badge belongs to its bar.
+                    ax.annotate(str(number), xy=((lowNm + highNm) / 2.0, value), ha="center", va="center",
+                                fontsize=6, color="white", zorder=6,
+                                bbox=dict(boxstyle="circle,pad=0.32", fc=self.__darken(color) or barColor,
+                                          ec=barColor, lw=0.8))
+                elif label:
+                    ax.annotate(str(label), xy=((lowNm + highNm) / 2.0, value), ha="center", va="bottom",
+                                fontsize=6, color=barColor)
         for marker in (getattr(view, "markers", None) or []):
             ax.axvline(marker[0], color="0.3", ls="--", lw=1)
             if len(marker) > 1 and marker[1]:
-                ax.annotate(str(marker[1]), xy=(marker[0], 1), xycoords=("data", "axes fraction"),
-                            ha="center", va="bottom", fontsize=8)
+                # ⚠ BOTTOM row, matching the screen: a marker usually sits inside a band (λmax lives in the Q
+                # window), and band captions own the top row. Two captions on one row overprint.
+                ax.annotate(str(marker[1]), xy=(marker[0], 0.015), xycoords=("data", "axes fraction"),
+                            ha="center", va="bottom", fontsize=7, color="0.35")
         if view.title:
             ax.set_title(view.title, fontsize=10)
         ax.set_xlabel("wavelength (nm)", fontsize=8)
         ax.tick_params(labelsize=7)
-        if plotted and any(t[1] for t in traces):
+        drewLegend = self.__drawLegend(ax, view)
+        # ⚠ A view with a DECLARED legend must not also get matplotlib's own trace legend — the curves are
+        # already named in ours, and the baseline would appear TWICE on paper (§23.3 duck #7).
+        if plotted and not drewLegend and any(t[1] for t in traces):
             ax.legend(fontsize=7, loc="best")
 
-    @staticmethod
-    def __plotSpectrum(ax, spectrum, label, color):
+    @classmethod
+    def __darken(cls, color, factor=0.55):
+        # The badge fill (SPEC_soret_448_trim.md §25.2). Shares the rule with the screen renderer via
+        # SpectralColorUtil, so a badge is the same colour on paper as on screen.
+        from sciens.spectracs.logic.spectral.util.SpectralColorUtil import SpectralColorUtil
+        darkened = SpectralColorUtil().darkenHex(color, factor)
+        return darkened if isinstance(darkened, str) and darkened.startswith("#") else None
+
+    def __drawLegend(self, ax, view):
+        # §25.2 — the declared legend box: square corners, semitransparent, anchored to a corner with a
+        # padding MAGNITUDE whose signs come from the enum. Rows are derived from the view, so paper and
+        # screen list the same things in the same order.
+        from sciens.spectracs.model.spectral.plugin.view.LegendPosition import LegendPosition
+        position = LegendPosition.parse(getattr(view, "legendPosition", None))
+        rows = view.legendRows() if position is not None and hasattr(view, "legendRows") else []
+        if not rows:
+            return False
+        from matplotlib.patches import Rectangle
+        cornerX, cornerY = position.corner()
+        padding = (getattr(view, "legendPadding", None) or self.__LEGEND_PADDING) / 72.0   # points -> inches
+        figureWidth, figureHeight = ax.figure.get_size_inches()
+        axesWidth = ax.get_position().width * figureWidth
+        axesHeight = ax.get_position().height * figureHeight
+        # ⭐ ONE ax.text PER ROW, because each row carries its OWN colour — a curve is named by its colour
+        # (§25.2) and matplotlib paints a whole text block in one. ⚠ The colours are DARKENED for paper: the
+        # screen's yellow #e8e337 on white is unreadable. Same two-ground rule as the badge fills.
+        fontSize = 6.0
+        lineHeight = (fontSize * 1.7 / 72.0) / axesHeight          # points -> axes fraction
+        boxWidth = (max(len(row[1]) for row in rows) * fontSize * 0.62 + 22.0) / 72.0 / axesWidth
+        boxHeight = lineHeight * len(rows) + lineHeight * 0.5
+        left = (1.0 - padding / axesWidth - boxWidth) if cornerX == 1.0 else (padding / axesWidth)
+        top = (1.0 - padding / axesHeight) if cornerY == 0.0 else (padding / axesHeight + boxHeight)
+        ax.add_patch(Rectangle((left, top - boxHeight), boxWidth, boxHeight, transform=ax.transAxes,
+                               facecolor=(1, 1, 1, 0.82), edgecolor="0.45", linewidth=0.6,
+                               zorder=8, clip_on=False))
+        for index, (number, label, color) in enumerate(rows):
+            rowY = top - lineHeight * (index + 0.85)
+            paperColor = self.__darken(self.__COLORS.get(color, color)) or "0.25"
+            if number is not None:
+                ax.annotate(str(number), xy=(left + 0.012, rowY + lineHeight * 0.3),
+                            xycoords=ax.transAxes, ha="center", va="center", fontsize=fontSize - 1.2,
+                            color="white", zorder=10,
+                            bbox=dict(boxstyle="circle,pad=0.3", fc=paperColor,
+                                      ec=self.__COLORS.get(color, color) or "0.45", lw=0.6))
+            ax.text(left + 0.028, rowY, str(label), transform=ax.transAxes, fontsize=fontSize,
+                    ha="left", va="baseline", color="0.15" if number is not None else paperColor, zorder=10)
+        return True
+
+    @classmethod
+    def __plotSpectrum(cls, ax, spectrum, label, color, style=None):
         if spectrum is None:
             return False
         values = spectrum.valuesByNanometers
@@ -314,7 +407,7 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
             return False
         nanometers = sorted(values.keys())
         ax.plot(nanometers, [values[nm] for nm in nanometers], color=color, lw=1.2,
-                label=(label or None))
+                ls=cls.__LINE_STYLES.get(style, "-"), label=(label or None))
         return True
 
     def visitTabGroup(self, view):

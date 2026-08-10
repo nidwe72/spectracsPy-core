@@ -86,6 +86,30 @@ class SpectrumFeatureLogicModule:
             nm: float(value - (slope * nm + intercept)) for nm, value in points}
         return corrected
 
+    def fittedBaseline(self, spectrum, windows):
+        # THE LINE that linearBaselineCorrected subtracts, as a Spectrum on the same keys — so a plot can draw
+        # it (SPEC_soret_448_trim.md §12.2/§12.3). Derived as `spectrum - corrected`, NOT by fitting a second
+        # time: a second polyfit would be a second source of truth for one line, free to drift from the one
+        # the metrics actually use. None whenever the correction itself is None (fewer than two anchor points).
+        #
+        # ⭐ The identity this exists to make visible:
+        #     mean(spectrum over band) - mean(fittedBaseline over band) == bandMean(corrected over band)
+        # i.e. draw the band's mean as a bar on the plotted curve, draw this line beneath it, and the VERTICAL
+        # GAP is the baselined value the verdict divides. Exact, because the correction is pointwise on the
+        # same keys and a mean is linear.
+        from sciens.spectracs.model.spectral.Spectrum import Spectrum
+        corrected = self.linearBaselineCorrected(spectrum, windows)
+        if corrected is None:
+            return None
+        correctedValues = corrected.valuesByNanometers
+        baseline = Spectrum()
+        baseline.role = spectrum.role
+        baseline.sampleType = spectrum.sampleType
+        baseline.valuesByNanometers = {
+            nm: float(value - correctedValues[nm]) for nm, value in self.__sorted(spectrum)
+            if nm in correctedValues}
+        return baseline
+
     def referenceGatedBand(self, valueSpectrum, gateSpectrum, lo, hi,
                            gateFraction, valueCeiling, gatePeakLo, gatePeakHi):
         # Mean of valueSpectrum over [lo, hi], keeping only wavelengths where the gate spectrum is healthy
