@@ -13,6 +13,11 @@ class SpectrumFeatureUtil(Singleton):
     def peakInRange(self, spectrum, lo, hi):
         return SpectrumFeatureLogicModule().peakInRange(spectrum, lo, hi)
 
+    def levelCrossing(self, spectrum, lo, hi, value):
+        # SPEC_v_metric_integration.md §7 — the nm where the curve crosses `value` inside [lo, hi].
+        # The plugin tier carries NO numpy, so this maths cannot live there (§1).
+        return SpectrumFeatureLogicModule().levelCrossing(spectrum, lo, hi, value)
+
     def linearBaseline(self, spectrum, lam, anchorLo, anchorHi, halfWindow=5):
         return SpectrumFeatureLogicModule().linearBaseline(spectrum, lam, anchorLo, anchorHi, halfWindow)
 

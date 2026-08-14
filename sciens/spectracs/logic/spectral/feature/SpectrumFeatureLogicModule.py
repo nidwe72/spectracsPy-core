@@ -28,6 +28,42 @@ class SpectrumFeatureLogicModule:
         nm, value = max(points, key=lambda pair: pair[1])
         return (float(nm), float(value))
 
+    def levelCrossing(self, spectrum, lo, hi, value):
+        # SPEC_v_metric_integration.md §6.2/§7 — the nm inside [lo, hi] at which the curve CROSSES `value`,
+        # linearly interpolated between the two bracketing samples; None when it never does.
+        #
+        # ⭐ WHY THIS EXISTS. The V tab draws a crosshair whose horizontal arm is the valley BAND MEAN and
+        # whose vertical arm must land where the curve actually attains it — so both arms are true statements
+        # at once. Marking the window's MINIMUM instead would sit on the curve but 23 % below the number the
+        # metric divides (measured, §6.2): it renders fine and is silently false.
+        #
+        # ⚠ FIRST crossing, deliberately. Eight of fifteen archived fills cross the mean 3 or 5 times from
+        # noise wiggles, all within a nanometre or two — "first" is the one deterministic choice, and the
+        # measured spread of the answer across 58 runs is 522.2 +/- 1.5 nm.
+        points = [(nm, v) for nm, v in self.__sorted(spectrum) if lo <= nm <= hi]
+        if len(points) < 2:
+            return None
+        for (nmA, valueA), (nmB, valueB) in zip(points, points[1:]):
+            deltaA, deltaB = valueA - value, valueB - value
+            if deltaA == 0.0:
+                return float(nmA)
+            if deltaA * deltaB < 0.0:
+                # linear interpolation between the bracketing samples — the marker sits on the crossing,
+                # not on the nearer sample (a 0.15 nm grid would otherwise quantise it visibly).
+                return float(nmA + (nmB - nmA) * deltaA / (deltaA - deltaB))
+        # ⚠ NO SIGN CHANGE, yet the value is (essentially) inside the window's range — a FLAT window, or a
+        # value that is the band MEAN of these very samples and misses exact equality by float summation
+        # rounding. Both say "the curve is at that level somewhere here", so answer with the nearest sample
+        # rather than None: a caller drawing a crosshair at a window's own mean must never get nothing back.
+        # ⚠ The slack is needed because a mean can land a few ULPs OUTSIDE [min, max] of a constant window
+        # (mean of 0.1 repeated is 0.09999999999999998) — that is arithmetic, not a missing crossing.
+        # ⛔ None stays reserved for the honest case: a value genuinely outside the window's range.
+        lowest, highest = min(v for _, v in points), max(v for _, v in points)
+        slack = 1e-12 * max(abs(lowest), abs(highest), 1.0)
+        if lowest - slack <= value <= highest + slack:
+            return float(min(points, key=lambda point: abs(point[1] - value))[0])
+        return None
+
     def linearBaseline(self, spectrum, lam, anchorLo, anchorHi, halfWindow=5):
         # Value at `lam` on the straight line through the anchor-window means at anchorLo and anchorHi.
         aLo = self.bandMean(spectrum, anchorLo - halfWindow, anchorLo + halfWindow)
