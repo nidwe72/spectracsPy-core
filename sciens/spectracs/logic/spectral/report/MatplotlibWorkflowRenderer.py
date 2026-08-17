@@ -416,7 +416,79 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         for label, child in view.tabs:
             if label:
                 self.__textBlock(self.__H_LABEL_IN, str(label), fontsize=10, weight="bold", color="0.3")
-            dispatchItem(child, self)
+            for item in (child if isinstance(child, list) else [child]):
+                dispatchItem(item, self)
+
+    def visitSeriesPlot(self, view):
+        """The stacked time-series plot on PAPER (SPEC_settled_measurement.md §18.3).
+
+        ⭐ The same declaration the screen draws, so a settling curve in the report and one on the bench
+        cannot drift — which matters more here than usual: ⭐⭐ a `Q%` that carries its own settling curve
+        is a different object from a bare number. It shows the reader that the value was CHOSEN, when,
+        and on what evidence (§18.6).
+        ⚠ Per-panel log scale is honoured (§18.7): `A_valley` falls 40x, and on a linear axis the part the
+        gate judges would be invisible.
+        """
+        panels = getattr(view, "panels", None) or []
+        if not panels:
+            return
+        if view.title:
+            self.__textBlock(self.__H_LABEL_IN, str(view.title), fontsize=10, weight="bold")
+        for label, value in (getattr(view, "header", None) or []):
+            self.__textBlock(self.__H_METRIC_IN, "%s:  %s" % (label, value), fontsize=9)
+
+        heightPerPanel = self.__H_PLOT_IN * 0.62
+        for panelSpec in panels:
+            rect = self.__reserve(heightPerPanel)
+            ax = self.__fig.add_axes([rect[0], rect[1] + 0.16 * rect[3], rect[2], 0.70 * rect[3]])
+            for series in panelSpec.get("series", []):
+                ax.plot(series["xs"], series["ys"], marker="o", markersize=3, linewidth=1.2,
+                        color=self.__COLORS.get(series.get("color"), series.get("color")) or "#e08000",
+                        label=series.get("label"))
+            for level in panelSpec.get("levels", []):
+                ax.axhline(level["value"], color="0.5", ls="--", lw=0.8)
+                if level.get("label"):
+                    ax.annotate(level["label"], xy=(0.99, level["value"]), xycoords=("axes fraction", "data"),
+                                fontsize=6, color="0.4", ha="right", va="bottom")
+            for marker in panelSpec.get("markers", []):
+                ax.axvline(marker["x"], color="#4aa3df", ls=":", lw=0.9)
+                if marker.get("label"):
+                    ax.annotate(marker["label"], xy=(marker["x"], 0.98), xycoords=("data", "axes fraction"),
+                                fontsize=6, color="#4aa3df", ha="left", va="top", rotation=90)
+            for point in panelSpec.get("points", []):
+                ax.plot([point["x"]], [point["y"]], marker="*", markersize=11, color="#1f9d55", linestyle="")
+                if point.get("label"):
+                    ax.annotate(point["label"], xy=(point["x"], point["y"]), fontsize=7, color="#1f9d55",
+                                xytext=(4, 4), textcoords="offset points")
+            if panelSpec.get("scale") == "log":
+                ax.set_yscale("log")
+            ax.set_ylabel(panelSpec.get("label") or panelSpec.get("key") or "", fontsize=8)
+            ax.set_xlabel(getattr(view, "xLabel", "") or "", fontsize=8)
+            ax.tick_params(labelsize=7)
+            ax.grid(True, alpha=0.25, linewidth=0.5)
+
+        for label, value in (getattr(view, "footer", None) or []):
+            # ⭐ §18.7: the audit line travels onto the paper too — a graph without it is a picture.
+            self.__textBlock(self.__H_METRIC_IN * 0.9, "%s:  %s" % (label, value), fontsize=7, color="0.45")
+
+    def visitTable(self, view):
+        # §18.8 — the generic table on paper. ⚠ It is DIAGNOSTIC content: a plugin decides whether to
+        # include the tab at all, so a customer's report never carries 34 rows of decision arithmetic.
+        rows = view.textRows()
+        if not rows:
+            return
+        if view.title:
+            self.__textBlock(self.__H_LABEL_IN, str(view.title), fontsize=10, weight="bold")
+        height = min(self.__H_PLOT_IN, self.__H_METRIC_IN * (len(rows) + 2))
+        rect = self.__reserve(height)
+        ax = self.__fig.add_axes([rect[0], rect[1], rect[2], rect[3]])
+        ax.axis("off")
+        table = ax.table(cellText=rows, colLabels=view.headerLabels(), loc="upper center", cellLoc="right")
+        table.auto_set_font_size(False)
+        table.set_fontsize(6)
+        table.scale(1.0, 1.1)
+        if view.caption:
+            self.__textBlock(self.__H_METRIC_IN, view.caption, fontsize=7, color="0.45")
 
     def visitSpectrumCapture(self, view):
         rect = self.__reserve(self.__H_CAPTURE_IN)

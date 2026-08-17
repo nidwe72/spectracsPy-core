@@ -19,6 +19,8 @@ from sciens.spectracs.model.spectral.plugin.view.MetricFieldView import MetricFi
 from sciens.spectracs.model.spectral.plugin.view.MetricFieldViewStyle import MetricFieldViewStyle
 from sciens.spectracs.model.spectral.plugin.view.SpectrumPlotView import SpectrumPlotView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
+from sciens.spectracs.model.spectral.plugin.view.SeriesPlotView import SeriesPlotView
+from sciens.spectracs.model.spectral.plugin.view.TableView import TableView
 from sciens.spectracs.model.spectral.plugin.view.TabGroupView import TabGroupView
 from sciens.spectracs.model.spectral.plugin.view.CaptureView import CaptureView
 from sciens.spectracs.model.spectral.plugin.view.ReportView import ReportView
@@ -46,6 +48,20 @@ from sciens.spectracs.plugin_sdk.base.MeasurementStep import MeasurementStep
 from sciens.spectracs.plugin_sdk.base.MetadataField import MetadataField
 from sciens.spectracs.plugin_sdk.roles import REFERENCE, SAMPLE, TRANSMISSION, ABSORPTION
 
+# --- monitored acquisition (SPEC_settled_measurement.md §10.2) ---
+# ⛔ THESE EXPORTS ARE LOAD-BEARING, not convenience. `PluginPublishUtil.lintSelfContained()` rejects a
+# plugin source that imports app or sibling code, so a plugin composing a monitor can reach these parts
+# ONLY through this namespace — omit them and the plugin fails at the LINT, not at runtime (§21/M1).
+from sciens.spectracs.plugin_sdk.acquisition.FrameRing import FrameRing
+from sciens.spectracs.plugin_sdk.acquisition.MonitorEngine import MonitorEngine
+from sciens.spectracs.plugin_sdk.acquisition.BurstEvaluator import BurstEvaluator
+from sciens.spectracs.plugin_sdk.acquisition.MonitorPolicy import MonitorPolicy
+from sciens.spectracs.plugin_sdk.acquisition.MonitorRow import MonitorRow
+from sciens.spectracs.plugin_sdk.acquisition.MonitorDecision import MonitorDecision
+from sciens.spectracs.plugin_sdk.acquisition.MonitorResult import MonitorResult
+from sciens.spectracs.plugin_sdk.acquisition.MonitorOutcome import MonitorOutcome
+from sciens.spectracs.plugin_sdk.acquisition.MonitorMode import MonitorMode
+
 # --- cross-cutting policy (plugin-declared flow/navigation; SPEC_simplified_plugin_navigation.md §4.2) ---
 from sciens.spectracs.plugin_sdk.policy.NavigationMode import NavigationMode
 from sciens.spectracs.plugin_sdk.policy.NavigationPolicy import NavigationPolicy
@@ -59,10 +75,12 @@ __all__ = [
     "SpectraContainer", "Spectrum", "SpectrumSampleType", "SpectralWorkflow", "SpectralWorkflowPhaseType",
     "SpectralWorkflowStep",
     "EvaluationResult", "ColorSwatchView", "VerdictView", "LabelView", "MetricFieldView", "MetricFieldViewStyle",
-    "SpectrumPlotView", "SpectrumCaptureView", "TabGroupView", "CaptureView", "ReportView", "LimsPublishView",
+    "SpectrumPlotView", "SpectrumCaptureView", "SeriesPlotView", "TableView", "TabGroupView", "CaptureView", "ReportView", "LimsPublishView",
     "VerdictGaugeView", "GaugeRender", "LegendPosition", "MetadataFormView",
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "BaselineOffsetOp", "SmoothOp", "MedianFilterOp",
     "EvaluationColorUtil", "SpectrumFeatureUtil", "GaugeColorUtil",
+    "FrameRing", "MonitorEngine", "BurstEvaluator", "MonitorPolicy", "MonitorRow", "MonitorDecision",
+    "MonitorResult", "MonitorOutcome", "MonitorMode",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "NavigationMode", "NavigationPolicy", "WorkflowPolicy",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",

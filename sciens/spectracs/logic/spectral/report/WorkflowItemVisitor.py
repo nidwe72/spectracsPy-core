@@ -2,7 +2,9 @@ from sciens.spectracs.model.spectral.plugin.view.ColorSwatchView import ColorSwa
 from sciens.spectracs.model.spectral.plugin.view.LabelView import LabelView
 from sciens.spectracs.model.spectral.plugin.view.MetricFieldView import MetricFieldView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
+from sciens.spectracs.model.spectral.plugin.view.SeriesPlotView import SeriesPlotView
 from sciens.spectracs.model.spectral.plugin.view.SpectrumPlotView import SpectrumPlotView
+from sciens.spectracs.model.spectral.plugin.view.TableView import TableView
 from sciens.spectracs.model.spectral.plugin.view.TabGroupView import TabGroupView
 from sciens.spectracs.model.spectral.plugin.view.VerdictView import VerdictView
 from sciens.spectracs.model.spectral.plugin.view.VerdictGaugeView import VerdictGaugeView
@@ -38,6 +40,15 @@ class WorkflowItemVisitor:
     def visitTabGroup(self, view):
         raise NotImplementedError
 
+    def visitSeriesPlot(self, view):
+        # SPEC_settled_measurement.md §18.3 — a stacked TIME-SERIES plot. Built once, drawn on screen (the
+        # Settling step-tab and the live convergence trace) and on paper (the report page).
+        raise NotImplementedError
+
+    def visitTable(self, view):
+        # §18.8 — a generic self-describing table; its first customer is the [Decisions] sub-tab.
+        raise NotImplementedError
+
 
 def dispatchItem(item, visitor):
     # The ONE isinstance ladder. Routes a plugin view-model to the visitor method for its type. Types are
@@ -56,6 +67,10 @@ def dispatchItem(item, visitor):
         return visitor.visitSpectrumCapture(item)
     if isinstance(item, SpectrumPlotView):
         return visitor.visitSpectrumPlot(item)
+    if isinstance(item, SeriesPlotView):
+        return visitor.visitSeriesPlot(item)
+    if isinstance(item, TableView):
+        return visitor.visitTable(item)
     if isinstance(item, LabelView):
         return visitor.visitLabel(item)
     return None

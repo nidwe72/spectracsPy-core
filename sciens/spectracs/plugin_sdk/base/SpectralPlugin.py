@@ -31,6 +31,19 @@ class SpectralPlugin:
     def publishing(self, workflow):
         pass  # empty -> phase skipped
 
+    def createMonitor(self, reference=None, mode=None, frames=None):
+        # Monitored acquisition (SPEC_settled_measurement.md §10.1a-bis). The plugin ASSEMBLES the object
+        # — engine + ring + ITS OWN evaluator — and hands it over; the host only pushes frames into it via
+        # `offer(frameSpectrum, timestamp)` and never calls back into the plugin during a run.
+        #
+        # ⭐ ADDITIVE BY DESIGN, and returning None is the whole point (§10.6): a plugin that needs no
+        # intermediate evaluation writes nothing, and the host gives it a plain BurstEvaluator monitor —
+        # byte-for-byte today's N-frame burst. ⛔ Which is also why SDK_VERSION does NOT bump for this
+        # (§19/I2): every sealed, DB-served plugin keeps loading unchanged.
+        #
+        # `mode` is a HOST argument (MonitorMode.PRODUCT / DIAGNOSTIC), never a plugin constant (§17/D3).
+        return None
+
     def policy(self):
         # Cross-cutting FLOW/presentation policy (SPEC_simplified_plugin_navigation.md §4.2) — the ONE hook for
         # navigation mode, step-chevrons, etc. Default = today's behaviour (STEP navigation, no step-chevrons),
