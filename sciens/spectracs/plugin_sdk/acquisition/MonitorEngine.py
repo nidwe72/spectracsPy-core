@@ -193,18 +193,39 @@ class MonitorEngine:
         stack = np.array([[frame.get(key, np.nan) for key in keys] for frame in frames], dtype=float)
         return int(np.sum(RobustReductionLogicModule().rejectDimFrames(stack)))
 
-    # How many recent DECISION rows keep their reduced spectrum alive. It must cover the widest read the
-    # evaluator can ask for (the vertex reaches ~2 decision rows back), with headroom — and no more:
-    # a 20-minute run has ~1700 rows, and keeping every mean spectrum would be ~34 MB of the very thing
-    # §15.3 keeps out of the product.
-    SPECTRUM_RETAIN_DECISION_ROWS = 5
+    # ⛔⛔ RETENTION IS SIZED IN **TIME**, NOT IN ROWS (SPEC_settled_measurement.md §27.25, M1).
+    #
+    # It used to be `SPECTRUM_RETAIN_DECISION_ROWS = 5`, justified as "the vertex reaches ~2 decision rows
+    # back". That was true at the DIAGNOSTIC script's 3.28-minute sampling and false on the bench: at ~3.5
+    # fps a decision row lands every ~17 s, so five rows is **85 seconds** of history — while jar B's `Q%`
+    # minimum sits **3.27 minutes** (11.5 rows) before the gate confirms it.
+    # ⇒ on every fill that actually CLEARED, the vertex winner's spectrum had already been thrown away, so
+    # the run produced an answer with no spectrum, the host set no container, and the operator was told
+    # "Capture failed — no frames were delivered by the camera". MEASURED: present at 0-4 rows back, gone
+    # from exactly 5. It was a window sized in rows, validated at one cadence, used at an 11x finer one.
+    #
+    # ⭐ A DECISION ROW'S SPECTRUM NOW LIVES AS LONG AS THE RUN MAY STILL NEED IT — `maxSeconds`, the cap
+    # the run cannot outlive — so no cadence change can invalidate it again. ⚠ THIS IS THE WHOLE POINT of
+    # expressing it in seconds: the next person to make rows denser (5 s is already asked for) must not
+    # have to re-derive a row count nobody would think to check.
+    # ⚠ The cost is bounded and small: at the 25-minute cap even a 5 s cadence keeps ~300 decision rows at
+    # ~30 KB each -> ~9 MB. ⛔ The 34 MB this comment used to fear is PER-FRAME spectra (~1700 of them);
+    # decision rows are ~50x fewer, and §15.3's rule — no raw frames in the product — is untouched.
+    NON_DECISION_RETAIN_ROWS = 2      # a provisional row is display-only; two is enough to draw from
+
+    def __retentionSeconds(self):
+        return float(self.policy.maxSeconds)
 
     def __pruneSpectra(self):
-        decisionRows = [row for row in self.rows if row.isDecisionRow]
-        for stale in decisionRows[:-self.SPECTRUM_RETAIN_DECISION_ROWS]:
+        # ⭐ Keep every decision row inside the retention window; drop only what the run can no longer read.
+        newest = self.rows[-1].t if self.rows else 0.0
+        horizon = newest - self.__retentionSeconds()
+        for stale in [row for row in self.rows if row.isDecisionRow]:
+            if stale.t >= horizon:
+                continue
             if getattr(stale, "spectrum", None) is not None and stale is not self.__promotedRow():
                 stale.spectrum = None
-        for stale in [row for row in self.rows if not row.isDecisionRow][:-2]:
+        for stale in [row for row in self.rows if not row.isDecisionRow][:-self.NON_DECISION_RETAIN_ROWS]:
             stale.spectrum = None
 
     def __promotedRow(self):
