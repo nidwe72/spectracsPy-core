@@ -11,7 +11,7 @@ class MonitorResult:
 
     def __init__(self, outcome, rows=None, spectrum=None, answer=None, columns=None, policy=None,
                  evaluatorId=None, evaluatorVersion=None, clearingSeconds=None, cancelled=False,
-                 capsHit=False, distinctFraction=None, notes=None, error=None):
+                 capsHit=False, distinctFraction=None, notes=None, error=None, views=None):
         self.outcome = outcome
         self.rows = rows or []
         self.spectrum = spectrum
@@ -29,6 +29,11 @@ class MonitorResult:
         self.distinctFraction = distinctFraction
         self.notes = notes or []
         self.error = error                         # the traceback when outcome is FAILED (§25/X5)
+        # ⭐ Plugin-declared view-models DESCRIBING this run (SPEC_settled_measurement.md §27.12). Built
+        # ONCE by the plugin, attached by the host to the step they describe, and handed back here so the
+        # capture panel renders the very same objects the report will collect. ⛔ Deliberately generic:
+        # this class knows they are views, not that they are settling curves.
+        self.views = list(views or [])
 
     def hasValue(self):
         return self.answer is not None and self.outcome.hasValue()
