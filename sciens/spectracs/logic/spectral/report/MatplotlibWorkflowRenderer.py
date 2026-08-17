@@ -3,7 +3,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
-from sciens.spectracs.logic.spectral.report.WorkflowItemVisitor import WorkflowItemVisitor, dispatchItem
+from sciens.spectracs.logic.spectral.report.WorkflowItemVisitor import (WorkflowItemVisitor, dispatchItem,
+                                                                        willDrawInReport)
 from sciens.spectracs.plugin_sdk.util.GaugeColorUtil import GaugeColorUtil
 
 
@@ -26,6 +27,14 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
     __HEADER_TOP = 0.955        # header band sits above the content area
     __CONTENT_TOP = 0.90        # first block starts here (below the header)
     __GAP_IN = 0.10             # vertical gap between blocks
+    __EDGE_PAD = 0.012          # a label closer than this to the paper's edge counts as falling off it
+    # ⭐ Left gutter for the stacked SERIES panels — room for wide tick labels plus a rotated y-axis label.
+    # ⛔ A CONSTANT ON PURPOSE, where the neighbouring guard is measured: the settling curves are separate
+    # view-models rendered in separate calls, so a per-plot fit would give each panel its own left edge and
+    # the stack would step down the page. Alignment needs one number they all share; the measured guard then
+    # only has to catch what this does not cover. Sized from the worst real case (the gate panel: 0.00175
+    # ticks under `|Δ A_valley / Δt| (the gate)`), which needed 0.08.
+    __PLOT_GUTTER = 0.08
 
     # Per-block height budgets (inches). Plots/captures get room to breathe; text rows are compact.
     __H_PHASE_IN = 0.34
@@ -45,15 +54,21 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
     __LEGEND_PADDING = 34.0    # points; the default when a view declares a position but no padding
 
     def render(self, reportView, groups, logoImage=None):
-        # groups: ordered list of (phaseLabel, [items]) — only phases that contributed flagged items.
+        # groups: ordered list of (label, [items]) — only phases that contributed flagged items.
+        #
+        # ⭐ D4 (SPEC_settled_measurement.md §27.14a): an entry may carry a third element, the HEADING LEVEL
+        # (0 = phase, 1 = step), so a sectioned phase reads "ACQUISITION" then "Reference" / "Sample".
+        # ⚠ 2-TUPLES STILL WORK and mean level 0 (§27.16/N7) — several tests call this method directly with
+        # `[("PROCESSING", [view])]`, and a contract change there would be breakage for no gain.
         self.__figures = []
         self.__reportView = reportView
         self.__logoImage = logoImage
         self.__fig = None
         self.__y = 0.0
         self.__newPage()
-        for phaseLabel, items in groups:
-            self.__drawPhaseHeading(phaseLabel)
+        for group in groups:
+            label, items = group[0], group[1]
+            self.__drawGroupHeading(label, group[2] if len(group) > 2 else 0)
             for item in items:
                 dispatchItem(item, self)
         return self.__figures
@@ -123,10 +138,48 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         self.__fig.text(rect[0], rect[1] + rect[3], text, ha="left", va="top",
                         fontsize=fontsize, fontweight=weight, color=color, wrap=True)
 
-    def __drawPhaseHeading(self, phaseLabel):
-        if not phaseLabel:
+    def __keepLabelsOnThePage(self, ax):
+        """Shift a plot's axes right until its y tick labels and y-axis label fit inside the left margin.
+
+        ⛔ THE BUG (Edwin, from the first report with curves, 2026-08-17): a plot's axes rect starts AT the
+        content margin, but matplotlib draws the tick labels and the rotated y-label OUTSIDE that rect — so
+        a long label over wide numbers runs off the page. MEASURED on the gate panel
+        (`|Δ A_valley / Δt| (the gate)` over values like 0.00175): leftmost label at figure x = **-0.000**,
+        i.e. printed past the paper's edge.
+
+        ⭐ MEASURED, NOT GUESSED. A fixed gutter would be wrong for the next dataset: the width of the
+        tick labels depends on the DATA (a log decade, a five-digit DN, a tiny rate), which is exactly the
+        variable that produced this. ⇒ draw, ask matplotlib where the labels actually landed, and give back
+        precisely the overflow.
+        ⚠ TWO THRESHOLDS, DELIBERATELY DIFFERENT — it TRIGGERS on the page edge and CORRECTS to the content
+        margin. Triggering on the margin instead would nudge every spectrum plot in the app (they measure
+        0.034 — inside the page, outside the margin, and that is how every archived report was drawn) ⇒ a
+        regenerated archive would shift for cosmetics. Triggering on the edge leaves them untouched, while a
+        plot that WOULD be cut is not merely rescued by a hair but lined up with the headings.
+
+        """
+        figure = self.__fig
+        figure.canvas.draw()
+        box = ax.get_tightbbox(figure.canvas.get_renderer())
+        leftmost = figure.transFigure.inverted().transform((box.x0, box.y0))[0]
+        if leftmost >= self.__EDGE_PAD:                     # inside the paper: leave it exactly as it is
             return
-        self.__textBlock(self.__H_PHASE_IN, str(phaseLabel).upper(), fontsize=11, weight="bold", color="0.25")
+        overflow = self.__LEFT - leftmost
+        if overflow <= 0:
+            return
+        left, bottom, width, height = ax.get_position().bounds
+        ax.set_position([left + overflow, bottom, max(width - overflow, 0.2), height])
+
+    def __drawGroupHeading(self, label, level=0):
+        # ⛔ §27.16/N7 — A STEP SUB-HEADING IS NOT UPPERCASED. The phase heading shouts because it is the
+        # document's top level; setting "REFERENCE" in the same caps makes a step look like a phase, which is
+        # the very confusion D4 exists to remove.
+        if not label:
+            return
+        if level <= 0:
+            self.__textBlock(self.__H_PHASE_IN, str(label).upper(), fontsize=11, weight="bold", color="0.25")
+        else:
+            self.__textBlock(self.__H_PHASE_IN * 0.85, str(label), fontsize=10, weight="bold", color="0.35")
 
     # --- visitor methods (mirror QtWorkflowRenderer's vocabulary) ---
 
@@ -349,6 +402,10 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         # already named in ours, and the baseline would appear TWICE on paper (§23.3 duck #7).
         if plotted and not drewLegend and any(t[1] for t in traces):
             ax.legend(fontsize=7, loc="best")
+        # ⚠ A NO-OP for today's spectra (measured: leftmost label at 0.034, comfortably inside the margin) —
+        # applied for the case that made it necessary next door: a wide axis (a five-digit DN, a log decade)
+        # pushing the labels off the page. ⇒ nothing moves unless something would otherwise be cut.
+        self.__keepLabelsOnThePage(ax)
 
     @classmethod
     def __darken(cls, color, factor=0.55):
@@ -411,12 +468,46 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         return True
 
     def visitTabGroup(self, view):
-        # T2 (SPEC_simplified_plugin_navigation.md §7b): paper has no tabs — stack the children under their tab
-        # headings so the reader sees every grouped image/plot (e.g. full-frame + cropped-ROI raster).
-        for label, child in view.tabs:
-            if label:
+        """Paper has no tabs — stack the children under their tab headings (T2, §7b).
+
+        ⭐⭐ `isShownInReport` IS HONOURED HERE TOO (SPEC_settled_measurement.md §27.13b / D1). It used to be
+        checked only on TOP-LEVEL items, so a group printed every child regardless — a settling run put its
+        Overview, all three curves AND both diagnostic tables on paper, measured at three pages where §18.8
+        promised the summary alone. Edwin, 2026-08-17: the flag is the canonical way to say what reaches the
+        PDF, and a tab group is not an exception to it.
+        ⚠ FILTER FIRST, HEAD SECOND (§27.14/W1): the label used to be written before the children were
+        dispatched, so filtering in place would have replaced three curve pages with three orphan headings.
+        ⛔ NEVER PRUNE THE VIEW OBJECT to achieve this (§27.18/Z1) — the capture panel renders the SAME
+        TabGroupView, so removing a tab for the report would remove it from the screen's Settling tab bar.
+        The filter is a read-only pass at RENDER time.
+        """
+        drawn = [(label, [item for item in (child if isinstance(child, list) else [child])
+                          if willDrawInReport(item)])
+                 for label, child in view.tabs]
+        drawn = [(label, items) for label, items in drawn if items]
+        if not drawn:
+            # ⚠ §27.14/W7 — the new silent failure is "flagged, but nothing inside is". Without this line it
+            # is indistinguishable from "the plugin declared nothing", which is a different bug entirely.
+            print("REPORT a tab group is flagged for the report but no child is: %s"
+                  % [label for label, _ in view.tabs])
+            return
+        # ⛔ §27.18/Z2 THE GROUP PRINTS NO TITLE OF ITS OWN, and §27.13e is answered by the level ABOVE it.
+        # The budget is three headings — phase · step · tab — and a group title would make four
+        # (ACQUISITION > Sample > Settling > Overview) before a single number. D4's step sub-heading names
+        # the section ("Sample"), and the group's own first item already says what it is.
+        # ⚠ The alternative — a "suppress my title here" flag set by the collector — would MUTATE the very
+        # object the screen renders (Z1). There is no flag because there is no title.
+        for label, items in drawn:
+            # ⚠ A TAB WHOSE SINGLE CHILD HAS ITS OWN TITLE LETS THE CHILD NAME IT (2026-08-17, from the first
+            # report with curves). On screen the tab bar and the plot are separate furniture, so "Q%" on the
+            # tab and "Q%" on the plot read as one thing; ⛔ stacked on paper they are two bold lines saying
+            # the same word — and for the other two the pair is worse, a short name followed by the real one
+            # ("Turbidity" / "A_valley 500–560 nm"). The child's title is the better of the two: it carries
+            # the units. ⚠ Tabs of untitled children (the raster captures, the Overview column) keep theirs.
+            single = items[0] if len(items) == 1 else None
+            if label and not (single is not None and getattr(single, "title", None)):
                 self.__textBlock(self.__H_LABEL_IN, str(label), fontsize=10, weight="bold", color="0.3")
-            for item in (child if isinstance(child, list) else [child]):
+            for item in items:
                 dispatchItem(item, self)
 
     def visitSeriesPlot(self, view):
@@ -432,15 +523,26 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         panels = getattr(view, "panels", None) or []
         if not panels:
             return
+        heightPerPanel = self.__H_PLOT_IN * 0.62
+        # ⚠ THE TITLE TRAVELS WITH ITS CURVE. The flow reserves block by block, so a title that happens to
+        # land at the bottom of a page left "A_valley 500–560 nm" alone on one page and its plot on the next
+        # (seen on the first report that carried curves). ⇒ ask for the title, its header lines AND the first
+        # panel as one lump: if that will not fit, the page breaks BEFORE the title rather than after it.
+        header = getattr(view, "header", None) or []
         if view.title:
+            self.__ensureSpace(self.__H_LABEL_IN + len(header) * self.__H_METRIC_IN + heightPerPanel)
             self.__textBlock(self.__H_LABEL_IN, str(view.title), fontsize=10, weight="bold")
-        for label, value in (getattr(view, "header", None) or []):
+        for label, value in header:
             self.__textBlock(self.__H_METRIC_IN, "%s:  %s" % (label, value), fontsize=9)
 
-        heightPerPanel = self.__H_PLOT_IN * 0.62
         for panelSpec in panels:
             rect = self.__reserve(heightPerPanel)
-            ax = self.__fig.add_axes([rect[0], rect[1] + 0.16 * rect[3], rect[2], 0.70 * rect[3]])
+            # ⛔ THE AXES RECT IS NOT WHERE THE LABELS ARE: matplotlib draws the tick labels and the rotated
+            # y-label OUTSIDE it, so starting at the content margin printed them off the paper (Edwin, from
+            # the first report with curves). ⇒ the panel keeps a fixed left gutter, shared by every series
+            # panel so a stack of curves lines up.
+            ax = self.__fig.add_axes([rect[0] + self.__PLOT_GUTTER, rect[1] + 0.16 * rect[3],
+                                      rect[2] - self.__PLOT_GUTTER, 0.70 * rect[3]])
             for series in panelSpec.get("series", []):
                 ax.plot(series["xs"], series["ys"], marker="o", markersize=3, linewidth=1.2,
                         color=self.__COLORS.get(series.get("color"), series.get("color")) or "#e08000",
@@ -466,6 +568,10 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
             ax.set_xlabel(getattr(view, "xLabel", "") or "", fontsize=8)
             ax.tick_params(labelsize=7)
             ax.grid(True, alpha=0.25, linewidth=0.5)
+            # ⛔ The gate panel's label (`|Δ A_valley / Δt| (the gate)`) over values like 0.00175 ran clean
+            # off the left edge of the page — measured at figure x = -0.000 (Edwin, 2026-08-17). The gutter
+            # above is what fixes it; this is the net for a label the gutter does not cover.
+            self.__keepLabelsOnThePage(ax)
 
         for label, value in (getattr(view, "footer", None) or []):
             # ⭐ §18.7: the audit line travels onto the paper too — a graph without it is a picture.

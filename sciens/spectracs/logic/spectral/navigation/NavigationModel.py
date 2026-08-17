@@ -33,7 +33,7 @@ class NavigationModel:
     }
 
     @staticmethod
-    def stops(workflow, policy=None, hasMetadataFields=False):
+    def stops(workflow, policy=None, hasMetadataFields=False, plannedPhases=None, sectionedPhases=None):
         # policy: a NavigationPolicy (or None -> default STEP, no step-expansion). Returns the ordered list of
         # NavStop, one per chevron.
         #
@@ -41,17 +41,37 @@ class NavigationModel:
         # rendered as a transient form — not a persisted step, so saved runs are unchanged). The host passes
         # hasMetadataFields (from the plugin's metadata() in a new run, or the persisted rows when viewing one)
         # so the METADATA chevron appears exactly when there is a form to fill.
+        #
+        # ⭐⭐ `plannedPhases` — THE PREDICTIVE PLAN (SPEC_settled_measurement.md §27.16/N1-N2). This method
+        # used to be called only by its own tests: the live chevron was built by a SECOND implementation
+        # inside AbstractPluginExecutionView._rebuildPlan, which differed in exactly one respect — it walks a
+        # PREDICTED phase list, so a new run's chevron shows PROCESSING and EVALUATION before those phases
+        # have any steps, and the operator sees the whole road ahead.
+        # ⇒ the host now passes that list in and there is ONE derivation again.
+        # ⚠ THE DIFFERENCE IS DELIBERATE, not incidental: with a planned list an EMPTY phase still earns a
+        # PHASE stop (that IS the prediction); without one, an empty phase is skipped. ⛔ Merging the two by
+        # deleting the prediction would silently shorten every new run's chevron.
+        # ⭐⭐ WHICH PHASES ARE SECTIONED BY STEP COMES FROM THE RECORD (D4, SPEC_settled_measurement.md
+        # §27.14a). The plugin declares it once, the workflow carries it, and the chevron reads it from
+        # there — which is why a RE-OPENED run now navigates the way it was measured. ⛔ Before D4 the
+        # declaration lived only in the live host's policy and was replaced by the default in VIEW mode, so
+        # a saved run showed one "Acquisition" chevron where the measurement had shown Reference › Sample.
+        # ⚠ `policy` remains the fallback for callers with no record in hand — the pure unit tests, and any
+        # pre-D4 caller. Production passes `sectionedPhases` from the workflow.
+        sections = sectionedPhases if sectionedPhases is not None else (
+            policy.stepChevronPhases if policy is not None else frozenset())
+        planned = plannedPhases if plannedPhases is not None else NavigationModel.PHASE_ORDER
         stops = []
-        for phaseType in NavigationModel.PHASE_ORDER:
+        for phaseType in planned:
             phase = workflow.getPhase(phaseType)
-            if phase is None:
+            if phase is None and plannedPhases is None:
                 continue
-            steps = list(phase.getSteps().values())
-            if not steps:
+            steps = list(phase.getSteps().values()) if phase is not None else []
+            if not steps and plannedPhases is None:
                 if phaseType == SpectralWorkflowPhaseType.METADATA and hasMetadataFields:
                     stops.append(NavStop(NavStopKind.PHASE, phaseType, NavigationModel.__phaseLabel(phaseType)))
                 continue  # otherwise an empty phase -> no stop
-            if policy is not None and policy.expandsSteps(phaseType):
+            if steps and phaseType in sections:
                 for step in steps:
                     stops.append(NavStop(NavStopKind.STEP, phaseType,
                                          NavigationModel.__stepLabel(step, phaseType), step=step))

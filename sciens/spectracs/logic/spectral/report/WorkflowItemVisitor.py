@@ -74,3 +74,26 @@ def dispatchItem(item, visitor):
     if isinstance(item, LabelView):
         return visitor.visitLabel(item)
     return None
+
+
+def willDrawInReport(item):
+    """Will the REPORT draw this item? (SPEC_settled_measurement.md §27.13b/D1, §27.18/Z1.)
+
+    ⭐⭐ ONE EMPTINESS RULE, THREE CALLERS: the tab-group renderer (skip an unflagged child, and skip its
+    heading with it), the report collector (a nested capture is only worth an /EmbeddedFiles attachment if
+    it is actually printed), and the step sub-heading (D4 — never head a section that draws nothing).
+    ⛔ Two emptiness rules would eventually disagree, and the disagreement would show as an orphan heading
+    or a missing attachment.
+
+    ⚠ `isShownInReport` is the CANONICAL say-so (Edwin, 2026-08-17) and it is honoured at EVERY depth — a
+    tab group used to be a hole in that rule, printing children that had explicitly declined the report.
+    ⛔ THE GUI IGNORES THIS ENTIRELY: `ReportableView`'s contract is "the report includes only flagged
+    items; the GUI ignores the flag", so `QtWorkflowRenderer.visitTabGroup` must NEVER call this — the
+    Settling tab bar on screen shows every curve.
+    """
+    if item is None:
+        return False
+    if isinstance(item, TabGroupView):
+        # A flagged group draws only if something inside it draws; an unflagged group draws nothing at all.
+        return bool(item.isShownInReport) and any(willDrawInReport(child) for child in item.children())
+    return bool(getattr(item, "isShownInReport", False))

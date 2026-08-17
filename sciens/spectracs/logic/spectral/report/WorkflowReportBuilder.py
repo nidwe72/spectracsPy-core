@@ -5,7 +5,9 @@ import tempfile
 
 from sciens.spectracs.model.spectral.SpectralWorkflowPhaseType import SpectralWorkflowPhaseType
 from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import SpectrumCaptureView
+from sciens.spectracs.model.spectral.plugin.view.TabGroupView import TabGroupView
 from sciens.spectracs.logic.spectral.report.MatplotlibWorkflowRenderer import MatplotlibWorkflowRenderer
+from sciens.spectracs.logic.spectral.report.WorkflowItemVisitor import willDrawInReport
 
 
 class WorkflowReportBuilder:
@@ -27,6 +29,11 @@ class WorkflowReportBuilder:
     # Visible body = the isShownInReport subset (curated, grouped by phase, workflow order).
     # Hidden payload = workflow.toReportJson() (the complete machine record).
 
+    # Heading levels a group may ask for (D4). ⭐ §27.18/Z2 budgets THREE headings on a page — phase, step,
+    # tab label — so there is no third level here and a tab group prints no title of its own.
+    __LEVEL_PHASE = 0
+    __LEVEL_STEP = 1
+
     __PHASE_LABELS = {
         SpectralWorkflowPhaseType.ACQUISITION: "Acquisition",
         SpectralWorkflowPhaseType.PROCESSING: "Processing",
@@ -40,6 +47,7 @@ class WorkflowReportBuilder:
         self.__reportView = reportView
         self.__figures = []
         self.__captures = []  # (attachmentName, pngBytes) for the flagged SpectrumCaptureViews
+        self.__assignedNames = set()  # names handed out this build — a pixel-less capture still reserves one
 
     def build(self):
         groups = self.__collectGroups()
@@ -50,24 +58,61 @@ class WorkflowReportBuilder:
     # --- collection: flagged items grouped by phase (workflow order); captures get a PIL rendition + name ---
 
     def __collectGroups(self):
+        # ⭐ D4 (SPEC_settled_measurement.md §27.14a): a phase the RECORD marks as sectioned contributes one
+        # group PER STEP, headed by the step's label ("Reference" / "Sample"), instead of one flat group
+        # under the phase name. ⛔ The declaration is read from the workflow, never from a plugin or a
+        # navigation policy: a LIMS addon rebuilding a report has neither, and a document's shape must not
+        # depend on whether a plugin happens to be loaded.
+        sectioned = self.__workflow.getSectionedPhases() if hasattr(self.__workflow, "getSectionedPhases") \
+            else frozenset()
         groups = []
         captureIndex = 0
         for phaseType in SpectralWorkflowPhaseType:
             phase = self.__workflow.getPhase(phaseType)
             if phase is None:
                 continue
-            items = []
+            phaseLabel = self.__PHASE_LABELS.get(phaseType, str(phaseType))
+            phaseItems = []
+            stepGroups = []
             for step in phase.getSteps().values():
+                items = []
                 for item in self.__stepItems(step):
-                    if not getattr(item, "isShownInReport", False):
+                    if not willDrawInReport(item):
                         continue
-                    if isinstance(item, SpectrumCaptureView):
-                        captureIndex += 1
-                        self.__prepareCapture(item, step, captureIndex)
+                    captureIndex = self.__prepareCaptures(item, step, captureIndex)
                     items.append(item)
-            if items:
-                groups.append((self.__PHASE_LABELS.get(phaseType, str(phaseType)), items))
+                if not items:
+                    continue
+                if phaseType in sectioned:
+                    stepGroups.append((step.getLabel() or phaseLabel, items, self.__LEVEL_STEP))
+                else:
+                    phaseItems.extend(items)
+            if phaseItems:
+                groups.append((phaseLabel, phaseItems, self.__LEVEL_PHASE))
+            elif stepGroups:
+                # ⚠ The phase heading is emitted even though the phase itself contributes no loose items:
+                # it is the parent of the step sections, and dropping it would leave "Reference"/"Sample"
+                # floating with no statement of which phase they belong to.
+                groups.append((phaseLabel, [], self.__LEVEL_PHASE))
+            groups.extend(stepGroups)
         return groups
+
+    def __prepareCaptures(self, item, step, captureIndex):
+        # ⛔⛔ §27.14/W6 — A CAPTURE NESTED IN A PRINTED TAB GROUP USED TO BE DRAWN BUT NEVER ATTACHED. This
+        # method only ever saw TOP-LEVEL items, while the renderer happily stacked a group's children ⇒ the
+        # page would show an image the machine payload did not carry, and its caption would silently lose
+        # the "[attachment: …]" marker. It never bit only because no tab group had ever been printed.
+        # ⭐ Decided (F3): TRAVERSE — the same descent the bench already does to fill nested pixels. ⚠ Only
+        # captures that WILL be drawn are attached, or the PDF would carry a PNG for an image it never shows.
+        if isinstance(item, TabGroupView):
+            for child in item.children():
+                if willDrawInReport(child):
+                    captureIndex = self.__prepareCaptures(child, step, captureIndex)
+            return captureIndex
+        if isinstance(item, SpectrumCaptureView):
+            captureIndex += 1
+            self.__prepareCapture(item, step, captureIndex)
+        return captureIndex
 
     @staticmethod
     def __stepItems(step):
@@ -84,16 +129,38 @@ class WorkflowReportBuilder:
         # Assign the /EmbeddedFiles name (role-based when known, else sequential) and take the PNG bytes pypdf
         # attaches from the host-supplied Qt-free rendition. `.reportImage` is a PIL image the host derived from
         # its QImage (S2); a workflow loaded from JSON has none — captures carry no pixels — so it is skipped.
+        #
+        # ⛔⛔ NAMES MUST BE UNIQUE, AND THEY WERE NOT (found while building F3, 2026-08-17). The name was
+        # derived from the STEP'S ROLE alone, but an acquisition step declares TWO reportable captures (full
+        # frame + cropped ROI, §7b) — so both were called `capture_sample.png`, and `pypdf.add_attachment`
+        # keeps ONE entry per name. ⇒ MEASURED: three captures on one step produced a single
+        # `/EmbeddedFiles` entry. Every report the app has written has been quietly dropping the cropped
+        # frame from its machine payload, while printing it on the page.
+        # ⭐ The FIRST capture of a role keeps exactly the name it has always had, so nothing that reads an
+        # existing report by name breaks; the rest are suffixed.
+        # ⚠ An archived report reconstructed by `report_reconstruct` arrives with `attachmentName` ALREADY
+        # SET from its own JSON, so this branch is skipped and historical names are preserved untouched.
         if not capture.attachmentName:
             role = step.getRole() if hasattr(step, "getRole") else None
-            slug = (role or ("capture_%d" % index))
-            capture.attachmentName = "capture_%s.png" % _slug(slug) if role else "capture_%d.png" % index
+            base = "capture_%s" % _slug(role) if role else "capture_%d" % index
+            capture.attachmentName = self.__uniqueAttachmentName(base)
         pil = capture.reportImage
         if pil is None:
             return
         buffer = io.BytesIO()
         pil.convert("RGB").save(buffer, format="PNG")
         self.__captures.append((capture.attachmentName, buffer.getvalue()))
+
+    def __uniqueAttachmentName(self, base):
+        # `capture_sample.png`, then `capture_sample_2.png`, … — the first of a role is unchanged.
+        taken = {name for name, _bytes in self.__captures} | set(self.__assignedNames)
+        candidate = "%s.png" % base
+        suffix = 1
+        while candidate in taken:
+            suffix += 1
+            candidate = "%s_%d.png" % (base, suffix)
+        self.__assignedNames.add(candidate)
+        return candidate
 
     def __loadLogo(self):
         from PIL import Image
