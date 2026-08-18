@@ -9,7 +9,7 @@ class MonitorDecision:
     CONTINUE = "CONTINUE"
 
     def __init__(self, promote=False, stop=False, outcome=None, branch=None, readAs=None,
-                 answer=None, note=None, promoteRow=None):
+                 answer=None, note=None, promoteRow=None, diagnostics=None):
         self.promote = promote      # this row becomes the answer (first promote wins — §14.6)
         # ⚠ WHICH row, when it is not the current one. On the was-clearing branch the answer is the Q%
         # MINIMUM, which by the time the gate confirms it is two decision rows back — and the spectrum
@@ -21,6 +21,13 @@ class MonitorDecision:
         self.readAs = readAs        # "FIRST_SETTLED_WINDOW" / "VERTEX"
         self.answer = answer        # optional refined scalar (e.g. a parabola vertex between two rows)
         self.note = note            # free text for the record (e.g. "TEST B reset the gate")
+        # ⭐⭐ WHAT THE RUN SAYS ABOUT ITSELF — an OPAQUE dict the engine carries into the answer without
+        # reading it (SPEC_settled_measurement.md §30/R2.1). The dev plugin puts `browningPerMinute`, the
+        # depth it measured and the threshold it measured against in here; ⛔ the engine must never learn
+        # what any of those mean, which is the same rule that keeps `values` opaque on a MonitorRow.
+        # ⭐ It rides inside `answer`, which `MonitorResult.toRecord()` already serialises wholesale — so a
+        # plugin can record a new diagnostic without a record key, a result field or a migration.
+        self.diagnostics = dict(diagnostics) if diagnostics else None
 
     @staticmethod
     def carryOn(note=None):

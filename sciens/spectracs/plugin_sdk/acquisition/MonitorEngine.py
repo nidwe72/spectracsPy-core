@@ -248,6 +248,10 @@ class MonitorEngine:
             self.__answer = {"valueKey": self.__valueKey(), "value": value, "t": winner.t,
                              "frameIndex": winner.frameIndex, "readAs": decision.readAs,
                              "branch": decision.branch}
+            if decision.diagnostics:
+                # ⭐ Carried, never inspected (§30/R2.1). The engine does not know — and must not learn —
+                # that one of these keys is a browning rate and another is a noise threshold.
+                self.__answer["diagnostics"] = dict(decision.diagnostics)
             self.__answerSpectrum = getattr(winner, "spectrum", None)
             self.__answerRow = winner
             # ⭐ §2.4: the clearing time is when the fill STOPPED clearing — i.e. when the gate confirmed
