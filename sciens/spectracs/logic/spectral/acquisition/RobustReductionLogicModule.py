@@ -43,11 +43,31 @@ class RobustReductionLogicModule:
                                    # deviation and MAD scale together — this fixed FRACTION is the one exception.
     __MAD_TO_SIGMA = 1.4826
 
-    def tukeyBiweightPerColumn(self, band):
+    def tukeyBiweightPerColumn(self, band, tieWindow=None):
         """band: 2-D array (rows × columns) of intensities; **NaN marks excluded pixels** (the caller masks
         saturated / dead — saturation is a per-CHANNEL fact, so it must be masked before qGray is formed, not
-        detected here). Returns a 1-D array, one robust location per column. A constant column (MAD==0) returns its
-        median unchanged; an all-NaN column returns NaN (the caller supplies the fallback, e.g. the plain median)."""
+        detected here). Returns a 1-D array, one robust location per column. An all-NaN column returns NaN (the
+        caller supplies the fallback, e.g. the plain median).
+
+        ⛔⛔ `MAD == 0` DOES NOT MEAN "CONSTANT COLUMN" — IT MEANS "OVER HALF THE ROWS SHARE THE MEDIAN", AND
+        THAT IS THE ORDINARY CASE AT LOW SIGNAL (SPEC_capture_quality.md §16.12.17, measured 2026-08-19). The
+        guard below used to read `moving = mad > 0` with the comment *"constant columns keep their median"*,
+        so such a column returned ONE EXACT INTEGER CODE and the information carried by the minority rows was
+        discarded. Measured on a live frame, 291 rows per column: **35 % of all columns**, 44-47 % below DN 30,
+        and **0 % above DN 60** — which is exactly the boundary between a smooth blue end and a staircase in
+        500-630 nm. The discarded signal is real: in those columns the plain mean sits a median of **0.45 DN**
+        away from the median that was returned instead.
+
+        ⭐ `tieWindow` is the caller's statement of **how far apart two adjacent quantisation levels are**, in
+        the SAME units as `band`, per column (scalar or 1-D). When a column's MAD collapses to zero and a
+        window is supplied, the location becomes the MEAN of the rows within ±`tieWindow` of the median —
+        robust like the biweight (a hot pixel is far outside the window and cannot pull it), but it USES the
+        dither instead of throwing it away, which is what recovers sub-quantum resolution.
+        ⚠ `tieWindow=None` keeps the historical median behaviour exactly, so callers that have no notion of a
+        quantum (tests, synthetic bands) are unchanged.
+        ⛔ This module still knows nothing about gamma or DN — the quantum is a fact about the CAPTURE CHAIN
+        and is computed by the caller that owns the decode.
+        """
         band = np.asarray(band, dtype=float)
         if band.ndim != 2 or band.shape[0] == 0:
             raise ValueError("tukeyBiweightPerColumn expects a non-empty 2-D (rows × cols) band")
@@ -57,7 +77,9 @@ class RobustReductionLogicModule:
         mad = np.where(np.isnan(mad), 0.0, mad)
 
         location = median.copy()
-        moving = mad > 0                                        # constant / all-NaN columns keep their median
+        moving = mad > 0                                        # all-NaN columns keep their median (NaN)
+        if tieWindow is not None:
+            location = np.where(~moving, self.__tiedMean(band, median, tieWindow), location)
         for _ in range(self.TUKEY_ITERS):
             scale = np.where(moving, self.TUKEY_C * mad, np.inf)
             u = (band - location) / scale
@@ -69,6 +91,25 @@ class RobustReductionLogicModule:
             location = np.where(moving, updated, location)
 
         return location
+
+    @staticmethod
+    def __tiedMean(band, median, tieWindow):
+        """The MEAN of the rows within ±`tieWindow` of the column median — the MAD==0 fallback (§16.12.17).
+
+        ⭐ Why a windowed mean and not a plain one: with 291 rows a single hot pixel at 255 against a median of
+        12 shifts a plain mean by 0.84 DN, which is LARGER than the ~0.45 DN of real sub-quantum signal being
+        recovered. The window is what keeps the fix from costing more than it buys.
+        ⚠ Falls back to the median wherever the window admits nothing (an all-NaN column, or a degenerate
+        window), so this can never make a column worse than it was."""
+        window = np.abs(np.asarray(tieWindow, dtype=float))
+        inside = np.abs(band - median) <= window
+        inside &= ~np.isnan(band)
+        count = np.sum(inside, axis=0)
+        total = np.nansum(np.where(inside, band, 0.0), axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            mean = np.where(count > 0, total / np.maximum(count, 1), median)
+        return np.where(np.isnan(mean), median, mean)
 
     def sigmaClippedMean(self, stack):
         """stack: 2-D array (frames × bins), NaN allowed for missing/dropped values. Per bin: iteratively reject
