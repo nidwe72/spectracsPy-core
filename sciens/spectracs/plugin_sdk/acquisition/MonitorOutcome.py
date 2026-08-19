@@ -16,6 +16,13 @@ class MonitorOutcome(Enum):
     SETTLED_AFTER_CLEARING = "SETTLED_AFTER_CLEARING"  # it cleared in the beam — vertex read
     COMPLETED = "COMPLETED"                            # a plain burst finished its N frames (§10.6)
 
+    # ⭐⭐ THE RUN ENDED BECAUSE THE FILL WAS GOING BACKWARDS (SPEC_settled_measurement.md §31, TEST C). It
+    # HAS a value — the first look, which on a coarsening fill is the least contaminated one — but the run
+    # did not settle, and telling the operator "settled" would be a lie with the truth buried one level down
+    # in a diagnostics dict. ⚠ An ADDITION, not a rename: §30.12's objection applies to renaming a persisted
+    # string, and adding a member orphans nothing.
+    DEGRADING_FILL = "DEGRADING_FILL"      # A_valley rose steadily — ripening, not settling — value stands
+
     NEVER_SETTLED = "NEVER_SETTLED"        # a cap was hit with the gate never firing — ⛔ NO value
     MEASUREMENT_BROKEN = "MEASUREMENT_BROKEN"  # below the plugin's own floor — ⛔ NO value, abort early
     CANCELLED = "CANCELLED"                # the operator stopped it — ⛔ no value unless the evaluator says so
@@ -24,4 +31,4 @@ class MonitorOutcome(Enum):
 
     def hasValue(self):
         return self in (MonitorOutcome.SETTLED_IMMEDIATE, MonitorOutcome.SETTLED_AFTER_CLEARING,
-                        MonitorOutcome.COMPLETED)
+                        MonitorOutcome.COMPLETED, MonitorOutcome.DEGRADING_FILL)
