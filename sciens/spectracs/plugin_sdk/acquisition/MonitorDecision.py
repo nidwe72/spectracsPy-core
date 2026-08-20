@@ -9,8 +9,14 @@ class MonitorDecision:
     CONTINUE = "CONTINUE"
 
     def __init__(self, promote=False, stop=False, outcome=None, branch=None, readAs=None,
-                 answer=None, note=None, promoteRow=None, diagnostics=None):
+                 answer=None, note=None, promoteRow=None, diagnostics=None, withdraw=False):
         self.promote = promote      # this row becomes the answer (first promote wins — §14.6)
+        # ⭐⭐ WITHDRAW — only meaningful from `finalize()` (SPEC_settled_measurement.md §46/B1, §40.4).
+        # ⛔ A finalize that REFUSES must take the gate's answer with it. Without this the run keeps a
+        # number the end-of-run read has just judged unsound: run 003's gate promoted 8.450 off the dark
+        # floor, finalize refuses, and leaving 8.450 in the record would be the §32.2 defect surviving the
+        # very fix written for it. ⚠ The rows and the trajectory are kept; only the ANSWER goes.
+        self.withdraw = withdraw
         # ⚠ WHICH row, when it is not the current one. On the was-clearing branch the answer is the Q%
         # MINIMUM, which by the time the gate confirms it is two decision rows back — and the spectrum
         # that must be reported is THAT row's window mean, not the gate row's.

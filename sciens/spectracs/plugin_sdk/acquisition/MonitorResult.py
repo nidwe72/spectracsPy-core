@@ -11,7 +11,8 @@ class MonitorResult:
 
     def __init__(self, outcome, rows=None, spectrum=None, answer=None, columns=None, policy=None,
                  evaluatorId=None, evaluatorVersion=None, clearingSeconds=None, cancelled=False,
-                 capsHit=False, distinctFraction=None, notes=None, error=None, views=None):
+                 capsHit=False, distinctFraction=None, notes=None, error=None, views=None,
+                 plannedEnd=False):
         self.outcome = outcome
         self.rows = rows or []
         self.spectrum = spectrum
@@ -22,6 +23,10 @@ class MonitorResult:
         self.evaluatorVersion = evaluatorVersion
         self.clearingSeconds = clearingSeconds     # ⭐ §2.4 — a sigma_fill component, not a curiosity
         self.cancelled = cancelled
+        # ⭐ §46/E2 — the run ended because its PLANNED duration elapsed, which is the normal ending under
+        # SPEC_settled_measurement.md §34. ⚠ Distinct from `capsHit`: that one means the 25-minute
+        # termination GUARANTEE fired, i.e. the planned end failed to, and something is wrong.
+        self.plannedEnd = plannedEnd
         self.capsHit = capsHit
         # ⭐ §23/V1: the fraction of offered frames that were NOT a repeat of their predecessor. Measured
         # at 82 % on the 2026-07-20 archive, which is a x1.10 noise inflation. A run whose duplicate rate
@@ -49,7 +54,7 @@ class MonitorResult:
         gotcha of SPEC_workflow_persistence.md turns such keys into strings on the way back."""
         return {
             "outcome": self.outcome.value if hasattr(self.outcome, "value") else self.outcome,
-            "cancelled": self.cancelled, "capsHit": self.capsHit,
+            "cancelled": self.cancelled, "capsHit": self.capsHit, "plannedEnd": self.plannedEnd,
             "evaluatorId": self.evaluatorId, "evaluatorVersion": self.evaluatorVersion,
             "policy": self.policy.toDict() if self.policy is not None else None,
             "clearingSeconds": self.clearingSeconds,
