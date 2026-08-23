@@ -1,8 +1,10 @@
 import colorsys
 import math
 
+import numpy
+
 from colour import (SpectralDistribution, MSDS_CMFS, SDS_ILLUMINANTS, sd_to_XYZ, XYZ_to_xy,
-                    xyY_to_XYZ, XYZ_to_sRGB)
+                    xyY_to_XYZ, XYZ_to_sRGB, XYZ_to_Lab, excitation_purity)
 
 from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModule import SpectrumToColorLogicModule
 from sciens.spectracs.logic.spectral.spectrumToColor.SpectrumToColorLogicModuleParameters import SpectrumToColorLogicModuleParameters
@@ -38,6 +40,11 @@ class EvaluationColorUtil:
     # white — (2·white − absorbed) — is the colorimetric "other half of the light" (the mixing-to-white complement),
     # which lands ~4° from the true perceived hue on K/L/M/N vs ~34° for a naive +180° HSL hue flip.
     __D65_XY = (0.31270, 0.32900)
+
+    # The luminance the CHROMATICITY-ONLY chips are reconstructed at. Y=1.0 pushes saturated colours far out of
+    # gamut; 0.5 is a mid tone. This is NOT the sample's brightness — the five chips are dilution-invariant by
+    # design (SPEC_color_retrieval.md §0/F8), and dropping Y is the mechanism (§7.10 F21).
+    __SWATCH_Y = 0.5
 
     def spectrumToRgbAndHue(self, spectrum):
         # UNCHANGED — the pumpkin verdict's hue path. Pinned-lightness swatch via rgbxy.
@@ -81,6 +88,77 @@ class EvaluationColorUtil:
         whiteX, whiteY = self.__D65_XY
         return self.__hslFromXy(2.0 * whiteX - x, 2.0 * whiteY - y)
 
+    def spectrumToPurity(self, spectrum, ceiling=None):
+        """SPEC_color_retrieval.md §7.12 C1 — **the replacement for the HSL `S` that pins to 100 %.**
+
+        Excitation purity: how far the chromaticity sits from the D65 white point along the line toward the
+        spectrum locus, in percent. 0 = white, 100 = a pure spectral colour. ⭐ Unlike HSL `S` it is defined by
+        the *chromaticity diagram*, not by a display gamut, so a colour outside sRGB gets a real number instead
+        of pinning at 100 the moment a channel clips. Dilution-invariant, exactly like `spectrumToHsl`."""
+        clean = self.__sanitize(spectrum, ceiling)
+        if clean is None:
+            return 0.0
+        x, y = self.__cieXy(clean)
+        try:
+            return float(excitation_purity([x, y], self.__D65_XY)) * 100.0
+        except Exception:                                 # degenerate chromaticity — treat as achromatic
+            return 0.0
+
+    def spectrumToLab(self, absorbance, path=1.0, ceiling=RELATIVE):
+        """SPEC_color_retrieval.md §7.12 C3 — chip 6, "as seen". Renders the ABSORBANCE at a declared **viewing
+        path** (`path=k` multiplies A, so k=3 is "through 3 cm of liquid where 1 cm was measured") and **KEEPS
+        the sample's own luminance**. Returns `(L*, C*, h_ab, (r,g,b))`.
+
+        ⛔ **NOT dilution-invariant, deliberately.** §7.6: brownness IS lightness IS concentration, so a chip
+        that shows "browner" cannot also be dilution-invariant. The five chips remain the invariant ones; this is
+        the one you can hold against a tube. Label it as such wherever it is rendered.
+
+        The ceiling is applied to A BEFORE the path multiplier (it exists to suppress a T→0 spike, not to cap the
+        viewing thickness) and defaults to RELATIVE — an absolute cap would clip everything once k > 1 (§7.10 F24)."""
+        clean = self.__sanitize(absorbance, ceiling)
+        if clean is None:
+            return (0.0, 0.0, 0.0, (128, 128, 128))
+        scale = max(0.0, float(path))
+        transmittance = {nanometer: min(1.0, 10.0 ** (-scale * value)) for nanometer, value in clean.items()}
+        xyz = self.__cieXyzDense(transmittance)
+        lightness, chroma, hue = self.__lch(xyz)
+        mapped = XYZ_to_sRGB(xyz, self.__D65_XY)
+        red, green, blue = (min(1.0, max(0.0, float(channel))) for channel in mapped)
+        return (lightness, chroma, hue, (int(round(red * 255)), int(round(green * 255)), int(round(blue * 255))))
+
+    def __cieXyzDense(self, transmittance):
+        """XYZ of a TRANSMITTANCE, sampled densely on the CMF grid by LINEAR interpolation, with un-measured
+        wavelengths treated as **transparent (T = 1)**.
+
+        ⛔ Two traps this exists to avoid, both measured 2026-08-23 (SPEC_color_retrieval.md §7.10 F29 / §7.12):
+        1. `SpectralDistribution.align` fills gaps by HOLDING the boundary sample — i.e. it extrapolates the
+           falling flank of the 624 nm band flat across 636-780 nm, 40 % of the visible red invented from one
+           point where the reference is ~33 DN. That renders Billa Clever OLIVE-GREEN where the eye says khaki
+           BROWN: it **inverts the visual ordering of the two oils**.
+        2. Anchoring a few sparse T = 1 points and letting `align` interpolate is worse still — its cubic
+           interpolation **overshoots** across the 1 nm step onto an opaque Soret (Y = 2.61, L* = 144).
+        Hence: dense, linear, explicit. ⚠ T = 1 outside the range is still an assumption — wrong at the blue end
+        (the Soret core below 420 nm is MORE absorbing, not less), but the CMF weight there is small under linear
+        interpolation, and it is the conservative choice in the red where the discrimination lives."""
+        cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
+        illuminant = SDS_ILLUMINANTS["D65"]
+        wavelengths = sorted(transmittance)
+        values = [transmittance[nanometer] for nanometer in wavelengths]
+        dense = {}
+        for nanometer in cmfs.wavelengths:
+            nanometer = float(nanometer)
+            if nanometer < wavelengths[0] or nanometer > wavelengths[-1]:
+                dense[nanometer] = 1.0                    # un-measured ⇒ transparent
+            else:
+                dense[nanometer] = float(numpy.interp(nanometer, wavelengths, values))
+        spectralDistribution = SpectralDistribution(dense).align(cmfs.shape)
+        return sd_to_XYZ(spectralDistribution, cmfs, illuminant, method="Integration") / 100.0
+
+    def __lch(self, xyz):
+        lab = XYZ_to_Lab(xyz, self.__D65_XY)
+        lightness, a, b = (float(v) for v in lab)
+        return (lightness, math.hypot(a, b), math.degrees(math.atan2(b, a)) % 360.0)
+
     def __sanitize(self, spectrum, ceiling):
         # F9: non-finite → 0, negatives → 0 (absorbance goes negative where T>1; negatives corrupt the CIE
         # integral), optional ceiling. None if the result is empty / all-dark.
@@ -114,21 +192,56 @@ class EvaluationColorUtil:
         index = min(len(positives) - 1, int(round(0.95 * (len(positives) - 1))))
         return self.RELATIVE_CEILING_MULTIPLE * positives[index]
 
-    def __cieXy(self, valuesByNanometers):
-        # SPEC_color_retrieval.md §F7/§F11: CIE → chromaticity xy (drops luminance ⇒ dilution-invariant).
+    def __cieXyz(self, valuesByNanometers):
+        # ⚠ SPEC_color_retrieval.md §7.10 F29: `align` extends the measured range (420-636 nm on this rig) out to
+        # the CMF shape by HOLDING the boundary sample, so 636-780 nm is extrapolated from one point. Shared by
+        # every path and every caller; the on-device build raises where desktop tolerates a grid mismatch.
         spectralDistribution = SpectralDistribution(valuesByNanometers)
         cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
         illuminant = SDS_ILLUMINANTS["D65"]
         spectralDistribution = spectralDistribution.align(cmfs.shape)
-        xyz = sd_to_XYZ(spectralDistribution, cmfs, illuminant, method="Integration")
-        xy = XYZ_to_xy(xyz)
+        return sd_to_XYZ(spectralDistribution, cmfs, illuminant, method="Integration") / 100.0
+
+    def __cieXy(self, valuesByNanometers):
+        # SPEC_color_retrieval.md §F7/§F11: CIE → chromaticity xy (drops luminance ⇒ dilution-invariant).
+        xy = XYZ_to_xy(self.__cieXyz(valuesByNanometers))
         return float(xy[0]), float(xy[1])
 
+    def __inSrgbGamut(self, x, y, luminance):
+        if y <= 1e-6:
+            return False
+        rgb = XYZ_to_sRGB(xyY_to_XYZ([x, y, luminance]))
+        return all(-1e-6 <= float(channel) <= 1.0 + 1e-6 for channel in rgb)
+
+    def gamutMapXy(self, x, y, luminance=None):
+        """Desaturate a chromaticity toward the D65 white point until it lands inside sRGB; returns
+        `(x, y, reach)` where `reach` = 1.0 means nothing was needed and < 1.0 says how far out of gamut it was.
+
+        ⛔ **Not used in the reported-number path** — see `__hslFromXy`. It moves hue by up to 45° and does not
+        cure `S ≡ 100 %`. Kept because `reach` is a useful *diagnostic* ("how unrenderable is this chip"), and a
+        renderer that wants a prettier out-of-gamut swatch than a per-channel clamp can opt in."""
+        luminance = self.__SWATCH_Y if luminance is None else luminance
+        whiteX, whiteY = self.__D65_XY
+        if self.__inSrgbGamut(x, y, luminance):
+            return (x, y, 1.0)
+        low, high = 0.0, 1.0
+        for _ in range(40):                              # bisect the mix factor toward white
+            middle = 0.5 * (low + high)
+            if self.__inSrgbGamut(whiteX + middle * (x - whiteX), whiteY + middle * (y - whiteY), luminance):
+                low = middle
+            else:
+                high = middle
+        return (whiteX + low * (x - whiteX), whiteY + low * (y - whiteY), low)
+
     def __hslFromXy(self, x, y):
-        # Reconstruct at a MID luminance (Y=0.5; Y=1 pushes saturated colours out of gamut) → sRGB (full gamut,
-        # no Hue-triangle clamp) → clamp [0,1] → HSL.
-        reconstructed = xyY_to_XYZ([x, y, 0.5])
-        rgb = XYZ_to_sRGB(reconstructed)
+        # Reconstruct at a MID luminance (§__SWATCH_Y) → sRGB → clamp → HSL.
+        # ⛔ MEASURED 2026-08-23, SPEC_color_retrieval.md §7.12 C1: gamut-mapping toward white here was tried and
+        # REVERTED. It shifts the reported hue by up to 45° on the badly out-of-gamut absorbed chromaticities
+        # (287.5° → 252.7° on a pumpkin absorbance) — hue is the one thing the verdict and F8 depend on — and it
+        # does NOT fix `S ≡ 100 %` anyway: the gamut boundary is exactly where min(r,g,b) = 0, which IS S = 100.
+        # `S` pinning at 100 is intrinsic to reading HSL saturation off an out-of-gamut chromaticity, whatever the
+        # rendering. The reportable colourfulness is Lab `C*` — see `spectrumToLch`, which has no gamut at all.
+        rgb = XYZ_to_sRGB(xyY_to_XYZ([x, y, self.__SWATCH_Y]))
         red, green, blue = (min(1.0, max(0.0, float(channel))) for channel in rgb)
         hls = colorsys.rgb_to_hls(red, green, blue)      # HLS order: [0]=h, [1]=l, [2]=s
         return (hls[0] * 360.0, hls[2] * 100.0, hls[1] * 100.0)
