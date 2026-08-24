@@ -41,6 +41,18 @@ class EvaluationColorUtil:
     # which lands ~4° from the true perceived hue on K/L/M/N vs ~34° for a naive +180° HSL hue flip.
     __D65_XY = (0.31270, 0.32900)
 
+    # What an un-measured wavelength is assumed to be, per source kind. Both say "transparent"; they differ
+    # only because one variable is the negative log of the other. See __cieXyzDense.
+    __PAD_TRANSMITTANCE = 1.0
+    __PAD_ABSORBANCE = 0.0
+
+    # Below this Lab CHROMA a chromaticity is ~grey and its hue is meaningless — the L*C*h counterpart of
+    # ACHROMATIC_CHROMA (SPEC_color_retrieval.md §7.13 C2, REOPENED by DOC_colour_geometry.md §12.1). Measured
+    # 2026-08-24 on near-grey spectra, where this guard is the only place it ever fires: HSL chroma and C*
+    # track at ratio ~0.85 (0.89 <-> 0.75), so 8.0 ports to ~7. ⛔ The ratio does NOT hold away from grey
+    # (Lugitsch reads S = 100 against C* = 349) — but the guard never runs there.
+    ACHROMATIC_CHROMA_LAB = 7.0
+
     # The luminance the CHROMATICITY-ONLY chips are reconstructed at. Y=1.0 pushes saturated colours far out of
     # gamut; 0.5 is a mid tone. This is NOT the sample's brightness — the five chips are dilution-invariant by
     # design (SPEC_color_retrieval.md §0/F8), and dropping Y is the mechanism (§7.10 F21).
@@ -104,6 +116,89 @@ class EvaluationColorUtil:
         except Exception:                                 # degenerate chromaticity — treat as achromatic
             return 0.0
 
+    # ------------------------------------------------------------------ P3: the composable polar/Lab API
+    # ⭐ ADDITIVE, deliberately (DOC_colour_geometry.md §12.1). `spectrumToHsl`, `rgbFromHsl`, `chroma` and
+    # `ACHROMATIC_CHROMA` all STAY: plugins ship as sealed DB blobs against the host's SDK, `SDK_VERSION`
+    # is a strict-equality gate, and three sealed rows would fail to load if this surface shrank. "Retire
+    # HSL" means the dev plugin stops CALLING it, not that the SDK drops it.
+    #
+    # The five below compose, so a caller can take a chromaticity once and ask several questions of it
+    # without re-integrating the spectrum:
+    #     xy = spectrumToChromaticity(spectrum, ...)
+    #     directionFromWhite(xy) / purityOf(xy) / lchOf(xy) / complementOf(xy)
+
+    # What kind of spectrum a caller is handing over. It selects ONLY the value assumed outside the
+    # measured range, and it is not cosmetic: for an absorbance "un-measured = transparent" means 0, for a
+    # transmittance it means 1. ⛔ Getting it wrong pads the un-measured red as OPAQUE and moves the
+    # transmitted chromaticity by ~13° of theta_W — caught 2026-08-24 by the archive sweep's 4° check,
+    # which is the reason this is an explicit argument and not an inferred default.
+    ABSORBANCE = "absorbance"
+    TRANSMITTANCE = "transmittance"
+
+    def spectrumToChromaticity(self, spectrum, source=ABSORBANCE, ceiling=None):
+        """The (x, y) chromaticity of a spectrum, or None when it is empty/all-dark.
+
+        `source` is `ABSORBANCE` (default) or `TRANSMITTANCE` — see the constants above. Chromaticity
+        itself is converter-independent; only the RENDERING of it into a display space is not."""
+        clean = self.__sanitize(spectrum, ceiling)
+        if clean is None:
+            return None
+        pad = self.__PAD_TRANSMITTANCE if source == self.TRANSMITTANCE else self.__PAD_ABSORBANCE
+        xy = XYZ_to_xy(self.__cieXyzDense(clean, pad))
+        return (float(xy[0]), float(xy[1]))
+
+    def complementOf(self, xy):
+        """The white-point complement: reflect through D65, `(2x_W - x, 2y_W - y)`. A point reflection, so
+        it preserves the DIRECTION exactly (mirrored) and the DISTANCE exactly.
+
+        ⚠ Nothing constrains the result to stay inside the spectrum locus. Measured over the 88-run
+        archive (DOC_colour_geometry.md §4.1): outside it on 15 % of runs, and at or past the boundary of
+        human vision on 70 %. Predictor: the SOURCE purity above ~77 % ⇒ the complement is not a colour.
+        ⭐ Its HUE survives all of that — 3.58° from the transmitted colour it stands in for, and no worse
+        where it is imaginary (§4.2). Report `directionFromWhite`; do not report its chroma."""
+        return (2.0 * self.__D65_XY[0] - xy[0], 2.0 * self.__D65_XY[1] - xy[1])
+
+    def directionFromWhite(self, xy):
+        """`theta_W` — the compass bearing of a chromaticity as seen from the white point, in degrees.
+        The DIRECTION of the ray whose locus intersection is the dominant wavelength.
+
+        ⭐ Chosen over `h_ab` as the reported hue of the chromaticity-only chips (§12.3): measured against
+        the transmitted colour, theta_W = 3.58 +/- 1.43 deg where h_ab = 12.09 and HSL = 9.47. Lab's hue
+        depends on CHROMA by design, and these chips compare colours whose chroma differ by 4x.
+        ⚠ As an ABSOLUTE readout it is near-constant on this pigment family — 246.80 +/- 0.53 deg over the
+        whole archive (§3.1) — and it inherits the capture-edge confound. It is the faithful coordinate,
+        not a discriminator. Nothing in the invariant family is one."""
+        return math.degrees(math.atan2(xy[1] - self.__D65_XY[1], xy[0] - self.__D65_XY[0])) % 360.0
+
+    def purityOf(self, xy):
+        """Excitation purity of a chromaticity, in percent — `r_W / R_W`, the distance from white as a
+        fraction of the distance to the spectrum locus on the same ray. ⛔ Returned UNCLAMPED: a value
+        over 100 means the point lies outside the locus, which is exactly the test `complementOf`'s
+        docstring relies on."""
+        try:
+            return float(excitation_purity(list(xy), self.__D65_XY)) * 100.0
+        except Exception:                                 # degenerate chromaticity — treat as achromatic
+            return 0.0
+
+    def lchOf(self, xy, luminance=None):
+        """`(L*, C*_ab, h_ab, (r,g,b))` for a chromaticity reconstructed at `luminance` (default the
+        chips' fixed __SWATCH_Y). Lab has no gamut, so the NUMBERS are safe; the rgb is still clamped, so
+        the SWATCH is not — which is why an out-of-gamut chip must be marked (§12.1).
+        ⚠ `L*` is a constant (76.07) whenever the default luminance is used: it is a rendering choice, not
+        a measurement. Do not print it on a chromaticity-only chip."""
+        luminance = self.__SWATCH_Y if luminance is None else luminance
+        xyz = xyY_to_XYZ([xy[0], xy[1], luminance])
+        lightness, chroma, hue = self.__lch(xyz)
+        red, green, blue = (min(1.0, max(0.0, float(channel))) for channel in XYZ_to_sRGB(xyz))
+        return (lightness, chroma, hue,
+                (int(round(red * 255)), int(round(green * 255)), int(round(blue * 255))))
+
+    def isRenderable(self, xy):
+        """True when a chromaticity is inside sRGB at the chips' swatch luminance — i.e. when the drawn
+        swatch is the colour the numbers describe. Thin wrapper over `__inSrgbGamut` so a plugin need not
+        reach for `gamutMapXy` just to ask the yes/no question (§11 D2)."""
+        return self.__inSrgbGamut(xy[0], xy[1], self.__SWATCH_Y)
+
     def spectrumToLab(self, absorbance, path=1.0, ceiling=RELATIVE):
         """SPEC_color_retrieval.md §7.12 C3 — chip 6, "as seen". Renders the ABSORBANCE at a declared **viewing
         path** (`path=k` multiplies A, so k=3 is "through 3 cm of liquid where 1 cm was measured") and **KEEPS
@@ -120,15 +215,16 @@ class EvaluationColorUtil:
             return (0.0, 0.0, 0.0, (128, 128, 128))
         scale = max(0.0, float(path))
         transmittance = {nanometer: min(1.0, 10.0 ** (-scale * value)) for nanometer, value in clean.items()}
-        xyz = self.__cieXyzDense(transmittance)
+        xyz = self.__cieXyzDense(transmittance, self.__PAD_TRANSMITTANCE)
         lightness, chroma, hue = self.__lch(xyz)
         mapped = XYZ_to_sRGB(xyz, self.__D65_XY)
         red, green, blue = (min(1.0, max(0.0, float(channel))) for channel in mapped)
         return (lightness, chroma, hue, (int(round(red * 255)), int(round(green * 255)), int(round(blue * 255))))
 
-    def __cieXyzDense(self, transmittance):
-        """XYZ of a TRANSMITTANCE, sampled densely on the CMF grid by LINEAR interpolation, with un-measured
-        wavelengths treated as **transparent (T = 1)**.
+    def __cieXyzDense(self, valuesByNanometers, padValue):
+        """XYZ of a spectrum, sampled densely on the CMF grid by LINEAR interpolation, with un-measured
+        wavelengths held at `padValue` — **1.0 for a transmittance** (un-measured ⇒ transparent) and
+        **0.0 for an absorbance** (the same physical assumption, in the other variable).
 
         ⛔ Two traps this exists to avoid, both measured 2026-08-23 (SPEC_color_retrieval.md §7.10 F29 / §7.12):
         1. `SpectralDistribution.align` fills gaps by HOLDING the boundary sample — i.e. it extrapolates the
@@ -137,18 +233,23 @@ class EvaluationColorUtil:
            BROWN: it **inverts the visual ordering of the two oils**.
         2. Anchoring a few sparse T = 1 points and letting `align` interpolate is worse still — its cubic
            interpolation **overshoots** across the 1 nm step onto an opaque Soret (Y = 2.61, L* = 144).
-        Hence: dense, linear, explicit. ⚠ T = 1 outside the range is still an assumption — wrong at the blue end
-        (the Soret core below 420 nm is MORE absorbing, not less), but the CMF weight there is small under linear
-        interpolation, and it is the conservative choice in the red where the discrimination lives."""
+        Hence: dense, linear, explicit. ⚠ Still an assumption, and wrong at the blue end (the Soret core below
+        420 nm is MORE absorbing, not less), but the CMF weight there is small under linear interpolation, and
+        it is the conservative choice in the red where the discrimination lives.
+
+        ⭐ **P1 / D5, 2026-08-24.** Until now only `spectrumToLab` came through here; every other chip went
+        through `align`'s constant hold. DOC_colour_geometry.md §9.2 measured what that cost on the absorbed
+        chromaticity: Billa's C* inflated 13 % (165.9 -> 144.5) and its hue moved 2.31°, with lambda_d moving
+        almost 12 nm. Every chip now shares this path."""
         cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
         illuminant = SDS_ILLUMINANTS["D65"]
-        wavelengths = sorted(transmittance)
-        values = [transmittance[nanometer] for nanometer in wavelengths]
+        wavelengths = sorted(valuesByNanometers)
+        values = [valuesByNanometers[nanometer] for nanometer in wavelengths]
         dense = {}
         for nanometer in cmfs.wavelengths:
             nanometer = float(nanometer)
             if nanometer < wavelengths[0] or nanometer > wavelengths[-1]:
-                dense[nanometer] = 1.0                    # un-measured ⇒ transparent
+                dense[nanometer] = padValue                   # un-measured
             else:
                 dense[nanometer] = float(numpy.interp(nanometer, wavelengths, values))
         spectralDistribution = SpectralDistribution(dense).align(cmfs.shape)
@@ -193,14 +294,11 @@ class EvaluationColorUtil:
         return self.RELATIVE_CEILING_MULTIPLE * positives[index]
 
     def __cieXyz(self, valuesByNanometers):
-        # ⚠ SPEC_color_retrieval.md §7.10 F29: `align` extends the measured range (420-636 nm on this rig) out to
-        # the CMF shape by HOLDING the boundary sample, so 636-780 nm is extrapolated from one point. Shared by
-        # every path and every caller; the on-device build raises where desktop tolerates a grid mismatch.
-        spectralDistribution = SpectralDistribution(valuesByNanometers)
-        cmfs = MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
-        illuminant = SDS_ILLUMINANTS["D65"]
-        spectralDistribution = spectralDistribution.align(cmfs.shape)
-        return sd_to_XYZ(spectralDistribution, cmfs, illuminant, method="Integration") / 100.0
+        """XYZ of an ABSORBANCE-like spectrum. ⭐ P1/D5: was `SpectralDistribution(...).align(...)`, whose
+        constant hold invents the un-measured red from one boundary sample (§7.10 F29). Now the same dense
+        linear path `spectrumToLab` has used since 2026-08-23, padded with A = 0 outside the measured range.
+        ⚠ This CHANGED numbers on every chromaticity chip — see DOC_colour_geometry.md §9.2."""
+        return self.__cieXyzDense(valuesByNanometers, self.__PAD_ABSORBANCE)
 
     def __cieXy(self, valuesByNanometers):
         # SPEC_color_retrieval.md §F7/§F11: CIE → chromaticity xy (drops luminance ⇒ dilution-invariant).

@@ -303,8 +303,13 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
             swatchLeft = rect[0] + 0.42 * rect[2]
             swatchWidth = side * (self.__PAGE_H_IN / self.__PAGE_W_IN)
             ax = self.__fig.add_axes([swatchLeft, rect[1] + (rect[3] - side), swatchWidth, side])
+            # D2 (DOC_colour_geometry.md §12.1): a dashed amber edge where the chromaticity is outside sRGB,
+            # so paper carries the same warning as the screen — the swatch is a clamp, not the measurement.
+            isOutOfGamut = view.style is not None and getattr(view.style, "isOutOfGamut", False)
             ax.add_patch(Rectangle((0, 0), 1, 1, facecolor=(red / 255.0, green / 255.0, blue / 255.0),
-                                   edgecolor="0.4"))
+                                   edgecolor=("#c8862a" if isOutOfGamut else "0.4"),
+                                   linewidth=(1.6 if isOutOfGamut else 1.0),
+                                   linestyle=("--" if isOutOfGamut else "-")))
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
             ax.axis("off")
