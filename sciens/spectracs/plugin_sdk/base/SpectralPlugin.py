@@ -1,4 +1,5 @@
 from sciens.spectracs.plugin_sdk.version import SDK_VERSION
+from sciens.spectracs.plugin_sdk.acquisition.Solvent import Solvent
 from sciens.spectracs.plugin_sdk.policy.WorkflowPolicy import WorkflowPolicy
 
 
@@ -13,6 +14,17 @@ class SpectralPlugin:
     # (SPEC_plugin_distribution.md §4 / §8 A2). Defaults to the shipping SDK, so an in-app plugin that does
     # not override it always matches by construction.
     targetSdkVersion = SDK_VERSION
+
+    # ⭐⭐ WHAT WAS IN THE JAR, AND HOW IT GOT THERE (2026-08-26). Both are pure PROVENANCE — they are
+    # stamped into the report header and change no behaviour here. `solvent` additionally selects which
+    # read rule the plugin REPORTS; see Solvent.
+    # ⛔ `prepProtocol` exists for the same reason `evaluatorVersion` does. The read rule is versioned so
+    # the archive can say which algorithm produced a number; the LAB RECIPE deserves the same, because on
+    # 2026-08-26 the recipe changed, the numbers moved, and nothing recorded which runs were made which
+    # way — so the question could not be answered retrospectively at all.
+    # ⚠ Free-form on purpose: a recipe is not an enum, and forcing one would just stop it being written.
+    solvent = Solvent.UNKNOWN
+    prepProtocol = None
 
     def acquisition(self, workflow):
         raise NotImplementedError

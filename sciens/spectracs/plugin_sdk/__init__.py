@@ -60,6 +60,7 @@ from sciens.spectracs.plugin_sdk.acquisition.MonitorRow import MonitorRow
 from sciens.spectracs.plugin_sdk.acquisition.MonitorDecision import MonitorDecision
 from sciens.spectracs.plugin_sdk.acquisition.MonitorResult import MonitorResult
 from sciens.spectracs.plugin_sdk.acquisition.MonitorOutcome import MonitorOutcome
+from sciens.spectracs.plugin_sdk.acquisition.Solvent import Solvent
 from sciens.spectracs.plugin_sdk.acquisition.MonitorMode import MonitorMode
 
 # --- cross-cutting policy (plugin-declared flow/navigation; SPEC_simplified_plugin_navigation.md §4.2) ---
@@ -80,7 +81,7 @@ __all__ = [
     "MeanOp", "TransmissionOp", "AbsorptionOp", "VerdictOp", "BaselineOffsetOp", "SmoothOp", "MedianFilterOp",
     "EvaluationColorUtil", "SpectrumFeatureUtil", "GaugeColorUtil",
     "FrameRing", "MonitorEngine", "BurstEvaluator", "MonitorPolicy", "MonitorRow", "MonitorDecision",
-    "MonitorResult", "MonitorOutcome", "MonitorMode",
+    "MonitorResult", "MonitorOutcome", "MonitorMode", "Solvent",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "NavigationMode", "NavigationPolicy", "WorkflowPolicy",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
