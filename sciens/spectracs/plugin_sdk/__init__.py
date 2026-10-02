@@ -67,6 +67,7 @@ from sciens.spectracs.plugin_sdk.acquisition.MonitorMode import MonitorMode
 from sciens.spectracs.plugin_sdk.policy.NavigationMode import NavigationMode
 from sciens.spectracs.plugin_sdk.policy.NavigationPolicy import NavigationPolicy
 from sciens.spectracs.plugin_sdk.policy.WorkflowPolicy import WorkflowPolicy
+from sciens.spectracs.plugin_sdk.policy.LampPolicy import LampPolicy
 
 # --- version / compatibility gate ---
 from sciens.spectracs.plugin_sdk.version import (
@@ -83,7 +84,7 @@ __all__ = [
     "FrameRing", "MonitorEngine", "BurstEvaluator", "MonitorPolicy", "MonitorRow", "MonitorDecision",
     "MonitorResult", "MonitorOutcome", "MonitorMode", "Solvent",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
-    "NavigationMode", "NavigationPolicy", "WorkflowPolicy",
+    "NavigationMode", "NavigationPolicy", "WorkflowPolicy", "LampPolicy",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
     "SDK_VERSION", "PluginSdkVersionError", "checkSdkCompatible", "checkSdkCompatibleVersion",
 ]
