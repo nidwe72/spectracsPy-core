@@ -8,6 +8,7 @@ from sciens.spectracs.model.spectral.plugin.view.SpectrumCaptureView import Spec
 from sciens.spectracs.model.spectral.plugin.view.TabGroupView import TabGroupView
 from sciens.spectracs.logic.spectral.report.MatplotlibWorkflowRenderer import MatplotlibWorkflowRenderer
 from sciens.spectracs.logic.spectral.report.WorkflowItemVisitor import willDrawInReport
+from sciens.spectracs.logic.camera.CameraSettingsTable import cameraRecordsOf, cameraSettingsTable
 
 
 class WorkflowReportBuilder:
@@ -87,14 +88,21 @@ class WorkflowReportBuilder:
                     stepGroups.append((step.getLabel() or phaseLabel, items, self.__LEVEL_STEP))
                 else:
                     phaseItems.extend(items)
+            cameraTable = cameraSettingsTable(cameraRecordsOf(phase.getSteps().values())) \
+                if phaseType == SpectralWorkflowPhaseType.ACQUISITION else None
             if phaseItems:
                 groups.append((phaseLabel, phaseItems, self.__LEVEL_PHASE))
-            elif stepGroups:
+            elif stepGroups or cameraTable is not None:
                 # ⚠ The phase heading is emitted even though the phase itself contributes no loose items:
                 # it is the parent of the step sections, and dropping it would leave "Reference"/"Sample"
                 # floating with no statement of which phase they belong to.
                 groups.append((phaseLabel, [], self.__LEVEL_PHASE))
             groups.extend(stepGroups)
+            if cameraTable is not None:
+                # ⭐ SPEC_camera_settings.md §7 (D8): the builder groups by step and has no phase slot, so the camera
+                # records are harvested here, by type — `willDrawInReport` rejects them, they are records — and ONE
+                # table follows the ACQUISITION section. Generic, needs no plugin: a LIMS addon gets it too.
+                groups.append(("Camera settings", [cameraTable], self.__LEVEL_STEP))
         return groups
 
     def __prepareCaptures(self, item, step, captureIndex):

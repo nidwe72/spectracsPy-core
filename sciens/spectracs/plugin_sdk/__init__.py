@@ -63,6 +63,12 @@ from sciens.spectracs.plugin_sdk.acquisition.MonitorOutcome import MonitorOutcom
 from sciens.spectracs.plugin_sdk.acquisition.Solvent import Solvent
 from sciens.spectracs.plugin_sdk.acquisition.MonitorMode import MonitorMode
 
+# --- camera settings (SPEC_camera_settings.md §3) — the vocabulary only; the profiles and resolve() are host
+# policy and live outside the SDK. ⚠ A plugin may return a plain {name: value} dict instead of importing these,
+# so a new row still loads on an app that predates them (§6.1, D10b). ---
+from sciens.spectracs.plugin_sdk.camera.CameraControl import CameraControl
+from sciens.spectracs.plugin_sdk.camera.CameraSettings import CameraSettings
+
 # --- cross-cutting policy (plugin-declared flow/navigation; SPEC_simplified_plugin_navigation.md §4.2) ---
 from sciens.spectracs.plugin_sdk.policy.NavigationMode import NavigationMode
 from sciens.spectracs.plugin_sdk.policy.NavigationPolicy import NavigationPolicy
@@ -85,6 +91,7 @@ __all__ = [
     "MonitorResult", "MonitorOutcome", "MonitorMode", "Solvent",
     "SpectralPlugin", "MeasurementStep", "MetadataField",
     "NavigationMode", "NavigationPolicy", "WorkflowPolicy", "LampPolicy",
+    "CameraControl", "CameraSettings",
     "REFERENCE", "SAMPLE", "TRANSMISSION", "ABSORPTION",
     "SDK_VERSION", "PluginSdkVersionError", "checkSdkCompatible", "checkSdkCompatibleVersion",
 ]

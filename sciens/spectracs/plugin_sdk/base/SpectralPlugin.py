@@ -56,6 +56,25 @@ class SpectralPlugin:
         # `mode` is a HOST argument (MonitorMode.PRODUCT / DIAGNOSTIC), never a plugin constant (§17/D3).
         return None
 
+    def cameraSettings(self, deviceDefaults):
+        # The plugin's CAMERA OVERRIDE (SPEC_camera_settings.md §6) — the top layer of
+        # `device default ← spectral profile ← plugin override`, applied to a MEASUREMENT open only (§6.2).
+        # `deviceDefaults` is the camera's firmware state (a CameraSettings), handed in by the host so a plugin can
+        # say "device contrast + 4" without touching hardware.
+        # Return a PARTIAL override: a CameraSettings or a plain {name: value} dict, e.g.
+        #     {"EXPOSURE": 90, "WHITE_BALANCE_KELVIN": 6500}
+        # ⭐ The plain dict is the safe form for a DB-served row: importing `plugin_sdk.camera` would fail on an app
+        # that predates it, and SDK_VERSION cannot see that (D10b). Exposure is in V4L2 units on every OS.
+        # ⚠ Image controls (gamma, contrast, …) are in CAMERA units — an override of one is camera-specific, and
+        # the record says which camera it ran on. Switching an auto loop on is accepted and badged ⛔ (Q8).
+        # None = the profile alone. A plugin that still declares only `exposure` gets {EXPOSURE: exposure}.
+        return None
+
+    def showsCameraTab(self):
+        # Q9: whether the capture panel shows the "Camera" inner tab (the settings each leg ran under). Off by
+        # default — an end user gets the table in the PDF; the dev bench plugin turns it on.
+        return False
+
     def policy(self):
         # Cross-cutting FLOW/presentation policy (SPEC_simplified_plugin_navigation.md §4.2) — the ONE hook for
         # navigation mode, step-chevrons, etc. Default = today's behaviour (STEP navigation, no step-chevrons),

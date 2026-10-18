@@ -598,8 +598,11 @@ class MatplotlibWorkflowRenderer(WorkflowItemVisitor):
         table.auto_set_font_size(False)
         table.set_fontsize(6)
         table.scale(1.0, 1.1)
-        if view.caption:
-            self.__textBlock(self.__H_METRIC_IN, view.caption, fontsize=7, color="0.45")
+        # One text block per caption LINE: a block reserves one line's height, and the camera table's caption
+        # carries several (profile, hold-back, ⛔ notes — SPEC_camera_settings.md §7).
+        for line in str(view.caption or "").split("\n"):
+            if line:
+                self.__textBlock(self.__H_METRIC_IN, line, fontsize=7, color="0.45")
 
     def visitSpectrumCapture(self, view):
         rect = self.__reserve(self.__H_CAPTURE_IN)
