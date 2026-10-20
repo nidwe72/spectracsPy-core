@@ -34,7 +34,7 @@ class ShellyGen2Driver(LampDriver):
             if not isinstance(status, dict) or "output" not in status:
                 return None
         return LampDevice(self.name, host, info.get("mac"), model=info.get("app") or info.get("model"),
-                          deviceId=info.get("id"), authRequired=authRequired)
+                          deviceId=info.get("id"), authRequired=authRequired, firmware=info.get("ver"))
 
     def create(self, device, password=None):
         return ShellyGen2LampSwitch(device.host, password, label="Shelly %s" % (device.model or ""))

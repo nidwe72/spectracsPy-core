@@ -1,6 +1,7 @@
 class LampDiscoveryResult:
-    # What a discovery run found (SPEC_lamp_switch.md §5). `chosen` is the plug the app will use: the stored
-    # MAC when it is among `devices`, else the first; None when nothing was found. `via` names the step that
+    # What a discovery run found (SPEC_lamp_switch.md §5). `chosen` is the plug asked for: the wanted device id
+    # (the active instrument's serial), else the stored MAC — never just the first one (SPEC_shelly_instrument_memory
+    # §11, R25); None when it is not among `devices`. `via` names the step that
     # found it ("stored" / "mdns" / "subnet") — for the log and the Settings page, not for logic.
 
     def __init__(self, devices=(), chosen=None, via=None):

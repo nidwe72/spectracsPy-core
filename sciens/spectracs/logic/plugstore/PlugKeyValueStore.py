@@ -21,12 +21,22 @@ class PlugKeyValueStore:
     META = "spectracs_m_"
     NATIVE_MAX = 253                    # JSON-escaped characters (§7.2)
     SLOT_CHARS = 60000                  # < 65 535 bytes per slot (§7.3); base64 is ASCII ⇒ chars = bytes
-    WRITE_PIECE = 8192                  # Script.PutCode append size
+    # Script.PutCode append size, by firmware (measured 2026-10-20, SPEC_shelly_instrument_memory.md §11.16):
+    #   0.13.0  2048 OK, 3072 → connection reset      1.3.3  8192 OK      1.7.5  7936 OK, 8192 → HTTP 413
+    # ⇒ 4096 (half the limit) from 1.3.3 on, 2048 below / unknown.
+    WRITE_PIECE = 2048
+    WRITE_PIECE_FROM_1_3 = 4096
     READ_PIECE = 4096                   # ⛔ never more: a whole-slot GetCode rebooted the plug (§7.3)
     FS_RESERVE = 16 * 1024              # flash kept free for the plug's own settings (§3.6)
     KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,30}$")   # 42-char KVS keys minus "spectracs_m_" (12); no dots
 
-    def __init__(self, transport: PlugStoreTransport):
+    @classmethod
+    def writePieceFor(cls, firmware) -> int:
+        version = tuple(int(part) for part in re.findall(r"\d+", (firmware or "").split("-")[0])[:3])
+        return cls.WRITE_PIECE_FROM_1_3 if version >= (1, 3, 0) else cls.WRITE_PIECE
+
+    def __init__(self, transport: PlugStoreTransport, writePiece: int = None):
+        self.writePiece = writePiece or self.WRITE_PIECE
         self.transport = transport
 
     # --- public -----------------------------------------------------------------------------------------
@@ -105,8 +115,8 @@ class PlugKeyValueStore:
             for index, piece in enumerate(pieces):
                 scriptId = self.transport.scriptCreate("%s%s~%d~%d" % (self.PREFIX, key, generation, index))
                 slots.append(scriptId)
-                for start in range(0, len(piece), self.WRITE_PIECE):
-                    self.transport.scriptAppend(scriptId, piece[start:start + self.WRITE_PIECE])
+                for start in range(0, len(piece), self.writePiece):
+                    self.transport.scriptAppend(scriptId, piece[start:start + self.writePiece])
             meta = {"t": kind, "s": slots, "n": len(text), "h": hashlib.sha256(text.encode()).hexdigest(),
                     "g": generation}
             if self.__readSlots(meta) != text:                     # read back before committing

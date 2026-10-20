@@ -2,13 +2,14 @@ class LampDevice:
     # A switchable plug found on the LAN (SPEC_lamp_switch.md §4.2/§5). Plain data: which driver speaks to it,
     # where it is, and its MAC — the MAC is the identity (the IP may change with DHCP).
 
-    def __init__(self, driverName, host, mac, model=None, deviceId=None, authRequired=False):
+    def __init__(self, driverName, host, mac, model=None, deviceId=None, authRequired=False, firmware=None):
         self.driverName = driverName
         self.host = host
         self.mac = (mac or "").upper().replace(":", "")
         self.model = model
         self.deviceId = deviceId
         self.authRequired = bool(authRequired)
+        self.firmware = firmware                 # e.g. "1.3.3" (Shelly `ver`), None if the driver does not tell
 
     def describe(self):
         return "%s · %s · %s" % (self.model or self.driverName, self.host, self.formattedMac())

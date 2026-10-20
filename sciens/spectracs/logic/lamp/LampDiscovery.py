@@ -28,14 +28,32 @@ class LampDiscovery:
         self.subnetHosts = subnetHosts if subnetHosts is not None else LampDiscovery.localSubnetHosts
         self.probeTimeout = probeTimeout
 
-    def discover(self, stored=None, useMdns=True, useSubnet=True):
+    def discover(self, stored=None, useMdns=True, useSubnet=True, wantedId=None):
+        """Find plugs. `chosen` is the plug with device id `wantedId` (the active instrument's serial, §11.3), else the
+        stored plug (same MAC) — and NEVER simply the first one found: with several Shellys in a room that switched a
+        stranger's plug (SPEC_shelly_instrument_memory.md §11, R25). The full list is in `devices`."""
         storedMac = stored.mac if stored is not None else None
         if stored is not None:
             device = self.__probe(stored.host, self.drivers)
-            if device is not None and device.mac == storedMac:
+            if device is not None and device.mac == storedMac and (wantedId is None or device.deviceId == wantedId):
                 return LampDiscoveryResult([device], device, "stored")
 
-        found = []
+        found, via = self.__scan(useMdns, useSubnet)
+        if not found:
+            return LampDiscoveryResult()
+        if wantedId is not None:
+            chosen = next((device for device in found if device.deviceId == wantedId), None)
+        else:
+            chosen = next((device for device in found if device.mac == storedMac), None)
+        return LampDiscoveryResult(found, chosen, via)
+
+    def discoverAll(self, useMdns=True, useSubnet=True):
+        """Every plug on the LAN, nothing chosen — for the setup and plug pages' picker (§11.3)."""
+        found, via = self.__scan(useMdns, useSubnet)
+        return LampDiscoveryResult(found, None, via if found else None)
+
+    def __scan(self, useMdns, useSubnet):
+        found, via = [], None
         if useMdns:
             serviceTypes = sorted({serviceType for driver in self.drivers for serviceType in driver.mdnsServiceTypes})
             hosts = self.__safe(lambda: self.mdnsBrowse(serviceTypes, self.MDNS_SECONDS), "mDNS browse")
@@ -45,10 +63,7 @@ class LampDiscovery:
             hosts = self.__safe(self.subnetHosts, "subnet listing")
             found = self.__probeAll(hosts, self.SUBNET_PROBE_TIMEOUT)
             via = "subnet"
-        if not found:
-            return LampDiscoveryResult()
-        chosen = next((device for device in found if device.mac == storedMac), found[0])
-        return LampDiscoveryResult(found, chosen, via)
+        return found, via
 
     def __probeAll(self, hosts, timeout):
         hosts = list(dict.fromkeys(hosts or ()))
